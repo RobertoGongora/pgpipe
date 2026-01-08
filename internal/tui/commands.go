@@ -50,31 +50,31 @@ func (m Model) connectDatabases() tea.Msg {
 // handleConnectionTest processes the result of connection testing
 func (m Model) handleConnectionTest(msg ConnectionTestMsg) (Model, tea.Cmd) {
 	if msg.mysqlErr != nil {
-		m.mysqlError = msg.mysqlErr.Error()
-		m.mysqlConnected = false
+		m.conn.MySQLError = msg.mysqlErr.Error()
+		m.conn.MySQLConnected = false
 	} else {
-		m.mysqlConnected = true
-		m.mysqlError = ""
+		m.conn.MySQLConnected = true
+		m.conn.MySQLError = ""
 		// Store client
 		client, _ := db.NewMySQLClient(&m.config.MySQL)
 		m.mysqlClient = client
 	}
 
 	if msg.pgErr != nil {
-		m.pgError = msg.pgErr.Error()
-		m.pgConnected = false
+		m.conn.PGError = msg.pgErr.Error()
+		m.conn.PGConnected = false
 	} else {
-		m.pgConnected = true
-		m.pgError = ""
+		m.conn.PGConnected = true
+		m.conn.PGError = ""
 		// Store client
 		client, _ := db.NewPostgresClient(&m.config.PostgreSQL)
 		m.pgClient = client
 	}
 
 	// Load tables if both connected
-	if m.mysqlConnected && m.pgConnected {
+	if m.conn.MySQLConnected && m.conn.PGConnected {
 		// Check if we're resuming with pre-configured tables
-		if m.sourceTable != "" && m.targetTable != "" && len(m.columnMappings) > 0 {
+		if m.selection.SourceTable != "" && m.selection.TargetTable != "" && len(m.selection.ColumnMappings) > 0 {
 			// We're resuming - load the columns for the saved tables
 			return m, tea.Batch(
 				m.loadMySQLColumns,
@@ -112,23 +112,23 @@ func (m Model) loadPGTables() tea.Msg {
 
 // loadMySQLColumns fetches columns for the selected MySQL table
 func (m Model) loadMySQLColumns() tea.Msg {
-	if m.mysqlClient == nil || m.sourceTable == "" {
+	if m.mysqlClient == nil || m.selection.SourceTable == "" {
 		return MySQLColumnsMsg{err: fmt.Errorf("not ready")}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
-	columns, err := m.mysqlClient.GetColumns(ctx, m.sourceTable)
+	columns, err := m.mysqlClient.GetColumns(ctx, m.selection.SourceTable)
 	return MySQLColumnsMsg{columns: columns, err: err}
 }
 
 // loadPGColumns fetches columns for the selected PostgreSQL table
 func (m Model) loadPGColumns() tea.Msg {
-	if m.pgClient == nil || m.targetTable == "" {
+	if m.pgClient == nil || m.selection.TargetTable == "" {
 		return PGColumnsMsg{err: fmt.Errorf("not ready")}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
-	columns, err := m.pgClient.GetColumns(ctx, m.targetTable)
+	columns, err := m.pgClient.GetColumns(ctx, m.selection.TargetTable)
 	return PGColumnsMsg{columns: columns, err: err}
 }
 
@@ -138,15 +138,15 @@ func (m Model) startMigration() tea.Cmd {
 	// This is necessary because the command runs asynchronously
 	mysqlClient := m.mysqlClient
 	pgClient := m.pgClient
-	sourceTable := m.sourceTable
-	targetTable := m.targetTable
-	columnMappings := m.columnMappings
-	batchSize := m.batchSize
-	runMode := m.runMode
-	batchLimit := m.batchLimit
-	mysqlColumns := m.mysqlColumns
+	sourceTable := m.selection.SourceTable
+	targetTable := m.selection.TargetTable
+	columnMappings := m.selection.ColumnMappings
+	batchSize := m.settings.BatchSize
+	runMode := m.settings.RunMode
+	batchLimit := m.settings.BatchLimit
+	mysqlColumns := m.data.MySQLColumns
 	existingState := m.state
-	hasExistingState := m.hasExistingState
+	hasExistingState := m.ui.HasExistingState
 
 	// Return a command that does ALL the work asynchronously
 	// This function will run in a goroutine by Bubble Tea

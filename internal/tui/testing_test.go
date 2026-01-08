@@ -30,17 +30,24 @@ func createTestModel() Model {
 	pgClient := testutil.NewMockPostgresClient()
 
 	return Model{
-		mysqlClient:  mysqlClient,
-		pgClient:     pgClient,
-		sourceTable:  "test_table",
-		targetTable:  "test_table",
-		mysqlColumns: columns,
-		batchSize:    1000,
-		runMode:      migration.RunModeContinuous,
-		columnMappings: []config.ColumnMapping{
-			{Source: "name", Target: "name"},
-			{Source: "email", Target: "email"},
+		mysqlClient: mysqlClient,
+		pgClient:    pgClient,
+		selection: SelectionState{
+			SourceTable: "test_table",
+			TargetTable: "test_table",
+			ColumnMappings: []config.ColumnMapping{
+				{Source: "name", Target: "name"},
+				{Source: "email", Target: "email"},
+			},
 		},
+		data: DataCache{
+			MySQLColumns: columns,
+		},
+		settings: SettingsState{
+			BatchSize: 1000,
+			RunMode:   migration.RunModeContinuous,
+		},
+		migration: MigrationState{},
 	}
 }
 

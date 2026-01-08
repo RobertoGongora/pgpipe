@@ -18,11 +18,11 @@ func (m Model) viewConnections() string {
 	// MySQL status
 	mysqlStatus := "⏳ Connecting..."
 	mysqlStyle := styles.StatusMuted
-	if m.mysqlConnected {
+	if m.conn.MySQLConnected {
 		mysqlStatus = "✓ Connected"
 		mysqlStyle = styles.StatusSuccess
-	} else if m.mysqlError != "" {
-		mysqlStatus = "✗ " + truncate(m.mysqlError, 50)
+	} else if m.conn.MySQLError != "" {
+		mysqlStatus = "✗ " + truncate(m.conn.MySQLError, 50)
 		mysqlStyle = styles.StatusError
 	}
 
@@ -41,11 +41,11 @@ func (m Model) viewConnections() string {
 	// PostgreSQL status
 	pgStatus := "⏳ Connecting..."
 	pgStyle := styles.StatusMuted
-	if m.pgConnected {
+	if m.conn.PGConnected {
 		pgStatus = "✓ Connected"
 		pgStyle = styles.StatusSuccess
-	} else if m.pgError != "" {
-		pgStatus = "✗ " + truncate(m.pgError, 50)
+	} else if m.conn.PGError != "" {
+		pgStatus = "✗ " + truncate(m.conn.PGError, 50)
 		pgStyle = styles.StatusError
 	}
 
@@ -61,12 +61,12 @@ func (m Model) viewConnections() string {
 	)))
 	sb.WriteString("\n\n")
 
-	if m.mysqlConnected && m.pgConnected {
+	if m.conn.MySQLConnected && m.conn.PGConnected {
 		sb.WriteString(renderHelp(
 			helpItem{Key: "Enter", Description: "Continue"},
 			helpItem{Key: "q", Description: "Quit"},
 		))
-	} else if m.mysqlError != "" || m.pgError != "" {
+	} else if m.conn.MySQLError != "" || m.conn.PGError != "" {
 		sb.WriteString(renderHelp(
 			helpItem{Key: "r", Description: "Retry"},
 			helpItem{Key: "q", Description: "Quit"},
@@ -87,7 +87,7 @@ func (m Model) handleConnectionsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		return m, m.connectDatabases
 	case "enter":
-		if m.mysqlConnected && m.pgConnected {
+		if m.conn.MySQLConnected && m.conn.PGConnected {
 			m.screen = ScreenSourceTable
 		}
 	}

@@ -23,12 +23,12 @@ func (m Model) viewSettings() string {
 
 	// Batch size
 	var batchLine string
-	if m.editingBatchSize {
-		batchLine = fmt.Sprintf("Batch Size: [%s_]", m.inputBuffer)
+	if m.settings.EditingBatchSize {
+		batchLine = fmt.Sprintf("Batch Size: [%s_]", m.settings.InputBuffer)
 	} else {
-		batchLine = fmt.Sprintf("Batch Size: %d", m.batchSize)
+		batchLine = fmt.Sprintf("Batch Size: %d", m.settings.BatchSize)
 	}
-	if m.settingsCursor == 0 {
+	if m.settings.SettingsCursor == 0 {
 		sb.WriteString(styles.SelectedItem.Render("▸ " + batchLine))
 	} else {
 		sb.WriteString(styles.ListItem.Render("  " + batchLine))
@@ -39,10 +39,10 @@ func (m Model) viewSettings() string {
 	sb.WriteString("Run Mode:\n")
 
 	continuousLine := "○ Continuous - Run until complete"
-	if m.runMode == migration.RunModeContinuous {
+	if m.settings.RunMode == migration.RunModeContinuous {
 		continuousLine = "● Continuous - Run until complete"
 	}
-	if m.settingsCursor == 1 {
+	if m.settings.SettingsCursor == 1 {
 		sb.WriteString(styles.SelectedItem.Render("▸ " + continuousLine))
 	} else {
 		sb.WriteString(styles.ListItem.Render("  " + continuousLine))
@@ -50,17 +50,17 @@ func (m Model) viewSettings() string {
 	sb.WriteString("\n")
 
 	var batchesLine string
-	if m.editingBatchLimit {
-		batchesLine = fmt.Sprintf("● Run [%s_] batches then stop", m.inputBuffer)
+	if m.settings.EditingBatchLimit {
+		batchesLine = fmt.Sprintf("● Run [%s_] batches then stop", m.settings.InputBuffer)
 	} else {
-		batchesLine = fmt.Sprintf("○ Run %d batches then stop", m.batchLimit)
+		batchesLine = fmt.Sprintf("○ Run %d batches then stop", m.settings.BatchLimit)
 	}
-	if m.runMode == migration.RunModeBatches {
-		if !m.editingBatchLimit {
-			batchesLine = fmt.Sprintf("● Run %d batches then stop", m.batchLimit)
+	if m.settings.RunMode == migration.RunModeBatches {
+		if !m.settings.EditingBatchLimit {
+			batchesLine = fmt.Sprintf("● Run %d batches then stop", m.settings.BatchLimit)
 		}
 	}
-	if m.settingsCursor == 2 {
+	if m.settings.SettingsCursor == 2 {
 		sb.WriteString(styles.SelectedItem.Render("▸ " + batchesLine))
 	} else {
 		sb.WriteString(styles.ListItem.Render("  " + batchesLine))
@@ -68,15 +68,15 @@ func (m Model) viewSettings() string {
 	sb.WriteString("\n\n")
 
 	// Summary
-	if len(m.mysqlTables) > 0 {
-		totalRows := m.mysqlTables[m.sourceTableIdx].RowCount
-		estimatedBatches := (totalRows + int64(m.batchSize) - 1) / int64(m.batchSize)
+	if len(m.data.MySQLTables) > 0 {
+		totalRows := m.data.MySQLTables[m.selection.SourceTableIdx].RowCount
+		estimatedBatches := (totalRows + int64(m.settings.BatchSize) - 1) / int64(m.settings.BatchSize)
 
 		var willProcess string
-		if m.runMode == migration.RunModeContinuous {
+		if m.settings.RunMode == migration.RunModeContinuous {
 			willProcess = fmt.Sprintf("%s rows", styles.FormatNumber(totalRows))
 		} else {
-			rowsThisRun := int64(m.batchLimit) * int64(m.batchSize)
+			rowsThisRun := int64(m.settings.BatchLimit) * int64(m.settings.BatchSize)
 			if rowsThisRun > totalRows {
 				rowsThisRun = totalRows
 			}
@@ -98,7 +98,7 @@ func (m Model) viewSettings() string {
 
 	// Add "Start Migration" button
 	startLine := fmt.Sprintf("▶ Start Migration (press %s)", "s")
-	if m.settingsCursor == 3 {
+	if m.settings.SettingsCursor == 3 {
 		sb.WriteString(styles.SelectedItem.Render("▸ " + startLine))
 	} else {
 		sb.WriteString(styles.ListItem.Render("  " + startLine))
@@ -107,7 +107,7 @@ func (m Model) viewSettings() string {
 	sb.WriteString("\n\n")
 
 	// Different help text depending on mode
-	if m.editingBatchSize || m.editingBatchLimit {
+	if m.settings.EditingBatchSize || m.settings.EditingBatchLimit {
 		sb.WriteString(renderHelp(
 			helpItem{Key: "Type", Description: "Number"},
 			helpItem{Key: "Backspace", Description: "Delete"},
@@ -132,31 +132,31 @@ func (m Model) viewSettings() string {
 
 func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle batch size editing mode
-	if m.editingBatchSize {
+	if m.settings.EditingBatchSize {
 		switch msg.String() {
 		case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			m.inputBuffer += msg.String()
+			m.settings.InputBuffer += msg.String()
 		case "backspace":
-			if len(m.inputBuffer) > 0 {
-				m.inputBuffer = m.inputBuffer[:len(m.inputBuffer)-1]
+			if len(m.settings.InputBuffer) > 0 {
+				m.settings.InputBuffer = m.settings.InputBuffer[:len(m.settings.InputBuffer)-1]
 			}
 		case "enter":
 			// Apply value with validation
-			if val, err := strconv.Atoi(m.inputBuffer); err == nil {
+			if val, err := strconv.Atoi(m.settings.InputBuffer); err == nil {
 				if val < MinBatchSize {
 					val = MinBatchSize
 				}
 				if val > MaxBatchSize {
 					val = MaxBatchSize
 				}
-				m.batchSize = val
+				m.settings.BatchSize = val
 			}
-			m.editingBatchSize = false
-			m.inputBuffer = ""
+			m.settings.EditingBatchSize = false
+			m.settings.InputBuffer = ""
 		case "esc":
 			// Cancel editing
-			m.editingBatchSize = false
-			m.inputBuffer = ""
+			m.settings.EditingBatchSize = false
+			m.settings.InputBuffer = ""
 		case "q":
 			m.quitting = true
 			return m, tea.Quit
@@ -165,31 +165,31 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Handle batch limit editing mode
-	if m.editingBatchLimit {
+	if m.settings.EditingBatchLimit {
 		switch msg.String() {
 		case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			m.inputBuffer += msg.String()
+			m.settings.InputBuffer += msg.String()
 		case "backspace":
-			if len(m.inputBuffer) > 0 {
-				m.inputBuffer = m.inputBuffer[:len(m.inputBuffer)-1]
+			if len(m.settings.InputBuffer) > 0 {
+				m.settings.InputBuffer = m.settings.InputBuffer[:len(m.settings.InputBuffer)-1]
 			}
 		case "enter":
 			// Apply value with validation
-			if val, err := strconv.Atoi(m.inputBuffer); err == nil {
+			if val, err := strconv.Atoi(m.settings.InputBuffer); err == nil {
 				if val < MinBatchLimit {
 					val = MinBatchLimit
 				}
 				if val > MaxBatchLimit {
 					val = MaxBatchLimit
 				}
-				m.batchLimit = val
+				m.settings.BatchLimit = val
 			}
-			m.editingBatchLimit = false
-			m.inputBuffer = ""
+			m.settings.EditingBatchLimit = false
+			m.settings.InputBuffer = ""
 		case "esc":
 			// Cancel editing
-			m.editingBatchLimit = false
-			m.inputBuffer = ""
+			m.settings.EditingBatchLimit = false
+			m.settings.InputBuffer = ""
 		case "q":
 			m.quitting = true
 			return m, tea.Quit
@@ -205,57 +205,57 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.screen = ScreenMapping
 	case "up", "k":
-		if m.settingsCursor > 0 {
-			m.settingsCursor--
+		if m.settings.SettingsCursor > 0 {
+			m.settings.SettingsCursor--
 		}
 	case "down", "j":
-		if m.settingsCursor < 3 { // Now 3 because we added "Start Migration"
-			m.settingsCursor++
+		if m.settings.SettingsCursor < 3 { // Now 3 because we added "Start Migration"
+			m.settings.SettingsCursor++
 		}
 	case "left", "h":
-		switch m.settingsCursor {
+		switch m.settings.SettingsCursor {
 		case 0: // Batch size
-			if m.batchSize > 100 {
-				m.batchSize -= 100
-			} else if m.batchSize > 1 {
-				m.batchSize = 1 // Jump to minimum
+			if m.settings.BatchSize > 100 {
+				m.settings.BatchSize -= 100
+			} else if m.settings.BatchSize > 1 {
+				m.settings.BatchSize = 1 // Jump to minimum
 			}
 		case 2: // Batch limit
-			if m.batchLimit > 10 {
-				m.batchLimit -= 10
-			} else if m.batchLimit > 1 {
-				m.batchLimit = 1 // Jump to minimum
+			if m.settings.BatchLimit > 10 {
+				m.settings.BatchLimit -= 10
+			} else if m.settings.BatchLimit > 1 {
+				m.settings.BatchLimit = 1 // Jump to minimum
 			}
 		}
 	case "right", "l":
-		switch m.settingsCursor {
+		switch m.settings.SettingsCursor {
 		case 0: // Batch size
-			if m.batchSize < 50000 {
-				m.batchSize += 100
+			if m.settings.BatchSize < 50000 {
+				m.settings.BatchSize += 100
 			}
 		case 2: // Batch limit
-			if m.batchLimit < 10000 {
-				m.batchLimit += 10
+			if m.settings.BatchLimit < 10000 {
+				m.settings.BatchLimit += 10
 			}
 		}
 	case "enter":
-		if m.settingsCursor == 0 {
+		if m.settings.SettingsCursor == 0 {
 			// Edit batch size
-			m.editingBatchSize = true
-			m.inputBuffer = fmt.Sprintf("%d", m.batchSize)
-		} else if m.settingsCursor == 1 {
+			m.settings.EditingBatchSize = true
+			m.settings.InputBuffer = fmt.Sprintf("%d", m.settings.BatchSize)
+		} else if m.settings.SettingsCursor == 1 {
 			// Select continuous mode
-			m.runMode = migration.RunModeContinuous
-		} else if m.settingsCursor == 2 {
+			m.settings.RunMode = migration.RunModeContinuous
+		} else if m.settings.SettingsCursor == 2 {
 			// Edit batch limit or select batch mode
-			m.runMode = migration.RunModeBatches
-			m.editingBatchLimit = true
-			m.inputBuffer = fmt.Sprintf("%d", m.batchLimit)
+			m.settings.RunMode = migration.RunModeBatches
+			m.settings.EditingBatchLimit = true
+			m.settings.InputBuffer = fmt.Sprintf("%d", m.settings.BatchLimit)
 		}
 	case "s":
-		if !m.editingBatchSize && !m.editingBatchLimit {
+		if !m.settings.EditingBatchSize && !m.settings.EditingBatchLimit {
 			// Save final settings before starting
-			m.config.Migration.Settings.BatchSize = m.batchSize
+			m.config.Migration.Settings.BatchSize = m.settings.BatchSize
 			m.config.Save()
 
 			// Start migration
@@ -264,10 +264,10 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case " ":
 		// Toggle run mode with space
-		if m.settingsCursor == 1 {
-			m.runMode = migration.RunModeContinuous
-		} else if m.settingsCursor == 2 {
-			m.runMode = migration.RunModeBatches
+		if m.settings.SettingsCursor == 1 {
+			m.settings.RunMode = migration.RunModeContinuous
+		} else if m.settings.SettingsCursor == 2 {
+			m.settings.RunMode = migration.RunModeBatches
 		}
 	}
 	return m, nil

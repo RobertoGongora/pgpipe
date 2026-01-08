@@ -23,7 +23,7 @@ func TestMigrationStartFlow(t *testing.T) {
 	model.screen = ScreenRunning
 
 	// Verify migrator is initially nil
-	if model.migrator != nil {
+	if model.migration.Migrator != nil {
 		t.Fatal("Expected migrator to be nil initially")
 	}
 
@@ -55,7 +55,7 @@ func TestMigrationStartFlow(t *testing.T) {
 
 	// Verify the model now has the migrator set
 	modelWithMigrator := newModel.(Model)
-	if modelWithMigrator.migrator == nil {
+	if modelWithMigrator.migration.Migrator == nil {
 		t.Fatal("BUG: Update() didn't set migrator on model - UI will freeze!\n" +
 			"This is the critical bug: migrator must be set via message handling in Update(),\n" +
 			"not in the command itself (commands can't modify the model)")
@@ -103,7 +103,7 @@ func TestMigrationStartedMsgSetsMigrator(t *testing.T) {
 	model.screen = ScreenRunning
 
 	// Initially nil
-	if model.migrator != nil {
+	if model.migration.Migrator != nil {
 		t.Fatal("Expected migrator to be nil initially")
 	}
 
@@ -118,14 +118,14 @@ func TestMigrationStartedMsgSetsMigrator(t *testing.T) {
 	modelWithMigrator := newModel.(Model)
 
 	// CRITICAL: Migrator must be set now
-	if modelWithMigrator.migrator == nil {
+	if modelWithMigrator.migration.Migrator == nil {
 		t.Fatal("REGRESSION: migrator not set after MigrationStartedMsg!\n" +
 			"This is the bug that causes UI to freeze.\n" +
 			"Migrator must be set in Update() message handler, not in the command.")
 	}
 
 	// Verify it's the same migrator from the message
-	if modelWithMigrator.migrator != startedMsg.migrator {
+	if modelWithMigrator.migration.Migrator != startedMsg.migrator {
 		t.Error("Migrator on model doesn't match migrator from message")
 	}
 }

@@ -21,7 +21,7 @@ func (m Model) viewWelcome() string {
 
 	// Check what we have saved
 	hasConfig := m.config.Migration.Source.Table != ""
-	hasState := m.hasExistingState && m.state != nil
+	hasState := m.ui.HasExistingState && m.state != nil
 
 	if hasState {
 		// Active migration found - show progress
@@ -40,7 +40,7 @@ func (m Model) viewWelcome() string {
 
 		options := []string{"Resume migration", "Start new migration"}
 		for i, opt := range options {
-			if i == m.resumeChoice {
+			if i == m.ui.ResumeChoice {
 				sb.WriteString(styles.SelectedItem.Render("▸ " + opt))
 			} else {
 				sb.WriteString(styles.ListItem.Render("  " + opt))
@@ -63,7 +63,7 @@ func (m Model) viewWelcome() string {
 
 		options := []string{"Use saved configuration", "Start fresh"}
 		for i, opt := range options {
-			if i == m.resumeChoice {
+			if i == m.ui.ResumeChoice {
 				sb.WriteString(styles.SelectedItem.Render("▸ " + opt))
 			} else {
 				sb.WriteString(styles.ListItem.Render("  " + opt))
@@ -89,48 +89,48 @@ func (m Model) viewWelcome() string {
 // handleWelcomeKeys handles key presses on the welcome screen
 func (m Model) handleWelcomeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	hasConfig := m.config.Migration.Source.Table != ""
-	hasState := m.hasExistingState && m.state != nil
+	hasState := m.ui.HasExistingState && m.state != nil
 
 	switch msg.String() {
 	case "q":
 		m.quitting = true
 		return m, tea.Quit
 	case "up", "k":
-		if m.resumeChoice > 0 {
-			m.resumeChoice--
+		if m.ui.ResumeChoice > 0 {
+			m.ui.ResumeChoice--
 		}
 	case "down", "j":
-		if (hasState || hasConfig) && m.resumeChoice < 1 {
-			m.resumeChoice++
+		if (hasState || hasConfig) && m.ui.ResumeChoice < 1 {
+			m.ui.ResumeChoice++
 		}
 	case "enter":
-		if hasState && m.resumeChoice == 0 {
+		if hasState && m.ui.ResumeChoice == 0 {
 			// Resume existing migration - jump to settings
 			// Config and state are already loaded in NewModel()
 			m.screen = ScreenSettings
 			return m, m.connectDatabases
-		} else if hasConfig && m.resumeChoice == 0 {
+		} else if hasConfig && m.ui.ResumeChoice == 0 {
 			// Use saved config - config is already loaded in NewModel()
 			// Jump to settings since everything is pre-configured
 			m.screen = ScreenSettings
 			return m, m.connectDatabases
-		} else if (hasState || hasConfig) && m.resumeChoice == 1 {
+		} else if (hasState || hasConfig) && m.ui.ResumeChoice == 1 {
 			// Start fresh - delete state and config
 			migration.DeleteState()
 			m.state = nil
-			m.hasExistingState = false
+			m.ui.HasExistingState = false
 
 			// Reset config to defaults
 			m.config = config.NewDefaultConfig()
 			m.config.Save()
 
 			// Reset all selections
-			m.selectedColumns = make(map[string]bool)
-			m.sourceTable = ""
-			m.targetTable = ""
-			m.columnMappings = nil
-			m.batchSize = 5000
-			m.batchLimit = 100
+			m.selection.SelectedColumns = make(map[string]bool)
+			m.selection.SourceTable = ""
+			m.selection.TargetTable = ""
+			m.selection.ColumnMappings = nil
+			m.settings.BatchSize = 5000
+			m.settings.BatchLimit = 100
 
 			m.screen = ScreenConnections
 			return m, m.connectDatabases

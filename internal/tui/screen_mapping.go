@@ -19,10 +19,10 @@ func (m Model) viewMapping() string {
 
 	sb.WriteString(styles.Title.Render("Column Mapping"))
 	sb.WriteString("\n")
-	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("%s → %s", m.sourceTable, m.targetTable)))
+	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("%s → %s", m.selection.SourceTable, m.selection.TargetTable)))
 	sb.WriteString("\n\n")
 
-	if len(m.columnMappings) == 0 {
+	if len(m.selection.ColumnMappings) == 0 {
 		sb.WriteString("Generating mappings...\n")
 	} else {
 		// Header
@@ -30,7 +30,7 @@ func (m Model) viewMapping() string {
 		sb.WriteString(styles.TableHeader.Render(header))
 		sb.WriteString("\n")
 
-		for i, mapping := range m.columnMappings {
+		for i, mapping := range m.selection.ColumnMappings {
 			target := mapping.Target
 			if target == "" {
 				target = "(skip)"
@@ -41,7 +41,7 @@ func (m Model) viewMapping() string {
 			}
 
 			line := fmt.Sprintf("%-25s %-25s %-15s", mapping.Source, target, transform)
-			if i == m.mappingCursor {
+			if i == m.selection.MappingCursor {
 				sb.WriteString(styles.SelectedItem.Render("▸ " + line))
 			} else {
 				sb.WriteString(styles.ListItem.Render("  " + line))
@@ -52,7 +52,7 @@ func (m Model) viewMapping() string {
 
 	// Show warnings
 	var warnings []string
-	for _, mapping := range m.columnMappings {
+	for _, mapping := range m.selection.ColumnMappings {
 		if mapping.Transform == "text_to_jsonb" {
 			warnings = append(warnings, fmt.Sprintf("⚠ %s: TEXT → JSONB (invalid JSON will be skipped)", mapping.Source))
 		}
@@ -82,28 +82,28 @@ func (m Model) handleMappingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.screen = ScreenTargetTable
 	case "up", "k":
-		if m.mappingCursor > 0 {
-			m.mappingCursor--
+		if m.selection.MappingCursor > 0 {
+			m.selection.MappingCursor--
 		}
 	case "down", "j":
-		if m.mappingCursor < len(m.columnMappings)-1 {
-			m.mappingCursor++
+		if m.selection.MappingCursor < len(m.selection.ColumnMappings)-1 {
+			m.selection.MappingCursor++
 		}
 	case "enter":
 		// Enter edit mode for the selected mapping
-		m.editingMapping = true
-		m.editTargetCursor = 0
+		m.ui.EditingMapping = true
+		m.ui.EditTargetCursor = 0
 		// Set available targets from pgColumns
-		m.availableTargets = m.pgColumns
+		m.ui.AvailableTargets = m.data.PGColumns
 
 		// Pre-select current target if one is set
-		if m.mappingCursor < len(m.columnMappings) {
-			currentTarget := m.columnMappings[m.mappingCursor].Target
+		if m.selection.MappingCursor < len(m.selection.ColumnMappings) {
+			currentTarget := m.selection.ColumnMappings[m.selection.MappingCursor].Target
 			if currentTarget != "" {
 				// Find the index of the current target
-				for i, col := range m.availableTargets {
+				for i, col := range m.ui.AvailableTargets {
 					if col.Name == currentTarget {
-						m.editTargetCursor = i + 1 // +1 because 0 is skip option
+						m.ui.EditTargetCursor = i + 1 // +1 because 0 is skip option
 						break
 					}
 				}
@@ -111,7 +111,7 @@ func (m Model) handleMappingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "c":
 		// Save mappings before continuing
-		m.config.Migration.Mapping = m.columnMappings
+		m.config.Migration.Mapping = m.selection.ColumnMappings
 		m.config.Save()
 
 		// Continue to settings
@@ -127,11 +127,11 @@ func (m Model) handleMappingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) viewMappingEditor() string {
 	var sb strings.Builder
 
-	if m.mappingCursor >= len(m.columnMappings) {
+	if m.selection.MappingCursor >= len(m.selection.ColumnMappings) {
 		return "Invalid mapping selection"
 	}
 
-	currentMapping := m.columnMappings[m.mappingCursor]
+	currentMapping := m.selection.ColumnMappings[m.selection.MappingCursor]
 
 	sb.WriteString(styles.Title.Render("Edit Column Mapping"))
 	sb.WriteString("\n")
@@ -144,10 +144,10 @@ func (m Model) viewMappingEditor() string {
 
 	// Calculate scrolling viewport for target columns
 	// +1 for skip option at index 0
-	totalOptions := len(m.availableTargets) + 1
+	totalOptions := len(m.ui.AvailableTargets) + 1
 	visibleCount := MaxVisibleTargets
 
-	startIdx := m.editTargetCursor - visibleCount/2
+	startIdx := m.ui.EditTargetCursor - visibleCount/2
 	if startIdx < 0 {
 		startIdx = 0
 	}
@@ -168,7 +168,7 @@ func (m Model) viewMappingEditor() string {
 			line = "(skip) - Don't migrate this column"
 		} else {
 			// Target column option
-			col := m.availableTargets[i-1]
+			col := m.ui.AvailableTargets[i-1]
 			line = fmt.Sprintf("%-30s %s", col.Name, col.DataType)
 
 			// Show if this column is already mapped from another source
@@ -178,7 +178,7 @@ func (m Model) viewMappingEditor() string {
 			}
 		}
 
-		if i == m.editTargetCursor {
+		if i == m.ui.EditTargetCursor {
 			sb.WriteString(styles.SelectedItem.Render("▸ " + line))
 		} else {
 			sb.WriteString(styles.ListItem.Render("  " + line))
@@ -203,7 +203,7 @@ func (m Model) viewMappingEditor() string {
 }
 
 func (m Model) handleMappingEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	maxCursor := len(m.availableTargets) // +1 for skip at 0, but 0-indexed so it works out
+	maxCursor := len(m.ui.AvailableTargets) // +1 for skip at 0, but 0-indexed so it works out
 
 	switch msg.String() {
 	case "q":
@@ -211,43 +211,43 @@ func (m Model) handleMappingEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc":
 		// Cancel editing
-		m.editingMapping = false
-		m.editTargetCursor = 0
+		m.ui.EditingMapping = false
+		m.ui.EditTargetCursor = 0
 	case "up", "k":
-		if m.editTargetCursor > 0 {
-			m.editTargetCursor--
+		if m.ui.EditTargetCursor > 0 {
+			m.ui.EditTargetCursor--
 		}
 	case "down", "j":
-		if m.editTargetCursor < maxCursor {
-			m.editTargetCursor++
+		if m.ui.EditTargetCursor < maxCursor {
+			m.ui.EditTargetCursor++
 		}
 	case "enter":
 		// Apply the selection
-		if m.editTargetCursor == 0 {
+		if m.ui.EditTargetCursor == 0 {
 			// Skip option selected
-			m.columnMappings[m.mappingCursor].Target = ""
-			m.columnMappings[m.mappingCursor].Transform = ""
+			m.selection.ColumnMappings[m.selection.MappingCursor].Target = ""
+			m.selection.ColumnMappings[m.selection.MappingCursor].Transform = ""
 		} else {
 			// Target column selected
-			selectedCol := m.availableTargets[m.editTargetCursor-1]
-			m.columnMappings[m.mappingCursor].Target = selectedCol.Name
+			selectedCol := m.ui.AvailableTargets[m.ui.EditTargetCursor-1]
+			m.selection.ColumnMappings[m.selection.MappingCursor].Target = selectedCol.Name
 
 			// Auto-detect transform if TEXT->JSONB
-			sourceCol := m.getSourceColumn(m.columnMappings[m.mappingCursor].Source)
+			sourceCol := m.getSourceColumn(m.selection.ColumnMappings[m.selection.MappingCursor].Source)
 			if sourceCol != nil && isTextType(sourceCol.DataType) && isJSONType(selectedCol.DataType) {
-				m.columnMappings[m.mappingCursor].Transform = "text_to_jsonb"
+				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "text_to_jsonb"
 			} else {
-				m.columnMappings[m.mappingCursor].Transform = ""
+				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = ""
 			}
 		}
 
 		// Save updated mappings
-		m.config.Migration.Mapping = m.columnMappings
+		m.config.Migration.Mapping = m.selection.ColumnMappings
 		m.config.Save()
 
 		// Exit edit mode
-		m.editingMapping = false
-		m.editTargetCursor = 0
+		m.ui.EditingMapping = false
+		m.ui.EditTargetCursor = 0
 	}
 	return m, nil
 }
@@ -255,7 +255,7 @@ func (m Model) handleMappingEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Helper methods for mapping editor
 
 func (m Model) getSourceColumnType(colName string) string {
-	for _, col := range m.mysqlColumns {
+	for _, col := range m.data.MySQLColumns {
 		if col.Name == colName {
 			return col.DataType
 		}
@@ -264,7 +264,7 @@ func (m Model) getSourceColumnType(colName string) string {
 }
 
 func (m Model) getSourceColumn(colName string) *db.ColumnInfo {
-	for _, col := range m.mysqlColumns {
+	for _, col := range m.data.MySQLColumns {
 		if col.Name == colName {
 			return &col
 		}
@@ -273,7 +273,7 @@ func (m Model) getSourceColumn(colName string) *db.ColumnInfo {
 }
 
 func (m Model) getSourceMappedTo(targetColName string) string {
-	for _, mapping := range m.columnMappings {
+	for _, mapping := range m.selection.ColumnMappings {
 		if mapping.Target == targetColName {
 			return mapping.Source
 		}

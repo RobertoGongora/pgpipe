@@ -40,48 +40,48 @@ func repeatChar(c rune, n int) string {
 	return string(result)
 }
 
-// filterColumns filters m.mysqlColumns based on search query
+// filterColumns filters m.data.MySQLColumns based on search query
 func (m *Model) filterColumns() {
-	if m.searchQuery == "" {
-		m.filteredColumns = nil
+	if m.ui.SearchQuery == "" {
+		m.ui.FilteredColumns = nil
 		return
 	}
 
-	query := strings.ToLower(m.searchQuery)
-	m.filteredColumns = nil
+	query := strings.ToLower(m.ui.SearchQuery)
+	m.ui.FilteredColumns = nil
 
-	for _, col := range m.mysqlColumns {
+	for _, col := range m.data.MySQLColumns {
 		if strings.Contains(strings.ToLower(col.Name), query) ||
 			strings.Contains(strings.ToLower(col.DataType), query) {
-			m.filteredColumns = append(m.filteredColumns, col)
+			m.ui.FilteredColumns = append(m.ui.FilteredColumns, col)
 		}
 	}
 
 	// Reset cursor if out of bounds
-	if m.columnCursor >= len(m.filteredColumns) {
-		m.columnCursor = 0
+	if m.selection.ColumnCursor >= len(m.ui.FilteredColumns) {
+		m.selection.ColumnCursor = 0
 	}
 }
 
 // filterTables filters tables based on search query
 func (m *Model) filterTables(tables []db.TableInfo) {
-	if m.tableSearchQuery == "" {
-		m.filteredTables = nil
+	if m.ui.TableSearchQuery == "" {
+		m.ui.FilteredTables = nil
 		return
 	}
 
-	query := strings.ToLower(m.tableSearchQuery)
-	m.filteredTables = nil
+	query := strings.ToLower(m.ui.TableSearchQuery)
+	m.ui.FilteredTables = nil
 
 	for _, table := range tables {
 		if strings.Contains(strings.ToLower(table.Name), query) {
-			m.filteredTables = append(m.filteredTables, table)
+			m.ui.FilteredTables = append(m.ui.FilteredTables, table)
 		}
 	}
 
 	// Reset cursor if out of bounds
-	if m.tableCursor >= len(m.filteredTables) {
-		m.tableCursor = 0
+	if m.selection.TableCursor >= len(m.ui.FilteredTables) {
+		m.selection.TableCursor = 0
 	}
 }
 

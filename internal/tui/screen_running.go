@@ -18,11 +18,11 @@ func (m Model) viewRunning() string {
 
 	sb.WriteString(styles.Title.Render("Migration in Progress"))
 	sb.WriteString("\n")
-	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("%s → %s", m.sourceTable, m.targetTable)))
+	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("%s → %s", m.selection.SourceTable, m.selection.TargetTable)))
 	sb.WriteString("\n\n")
 
 	// Show initialization status if migrator not ready yet
-	if m.migrator == nil {
+	if m.migration.Migrator == nil {
 		sb.WriteString(styles.Box.Render("Initializing Migration"))
 		sb.WriteString("\n\n")
 
@@ -90,8 +90,8 @@ func (m Model) viewRunning() string {
 func (m Model) handleRunningKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q":
-		if m.migrator != nil {
-			m.migrator.Stop()
+		if m.migration.Migrator != nil {
+			m.migration.Migrator.Stop()
 		}
 		m.screen = ScreenSummary
 	case "enter":

@@ -14,24 +14,24 @@ func (m Model) viewSourceColumns() string {
 
 	sb.WriteString(styles.Title.Render("Select Columns to Migrate"))
 	sb.WriteString("\n")
-	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("Table: %s", m.sourceTable)))
+	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("Table: %s", m.selection.SourceTable)))
 	sb.WriteString("\n\n")
 
-	if len(m.mysqlColumns) == 0 {
+	if len(m.data.MySQLColumns) == 0 {
 		sb.WriteString("Loading columns...\n")
 		return sb.String()
 	}
 
 	// Show search box if in search mode
-	if m.searchMode {
-		searchBox := fmt.Sprintf("Search: %s_", m.searchQuery)
+	if m.ui.SearchMode {
+		searchBox := fmt.Sprintf("Search: %s_", m.ui.SearchQuery)
 		sb.WriteString(styles.InputFocused.Render(searchBox))
 		sb.WriteString("\n\n")
 	}
 
 	// Find primary key
 	var pkName string
-	for _, col := range m.mysqlColumns {
+	for _, col := range m.data.MySQLColumns {
 		if col.IsPrimaryKey {
 			pkName = col.Name
 			break
@@ -40,13 +40,13 @@ func (m Model) viewSourceColumns() string {
 	sb.WriteString(styles.Label.Render(fmt.Sprintf("Primary Key: %s (auto-included)\n\n", pkName)))
 
 	// Use filtered columns if searching, otherwise use all columns
-	columns := m.mysqlColumns
-	if m.searchMode && len(m.searchQuery) > 0 {
-		columns = m.filteredColumns
+	columns := m.data.MySQLColumns
+	if m.ui.SearchMode && len(m.ui.SearchQuery) > 0 {
+		columns = m.ui.FilteredColumns
 	}
 
 	// Show "no results" message if search returned nothing
-	if m.searchMode && len(m.searchQuery) > 0 && len(columns) == 0 {
+	if m.ui.SearchMode && len(m.ui.SearchQuery) > 0 && len(columns) == 0 {
 		sb.WriteString(styles.StatusWarning.Render("No columns match your search\n"))
 		sb.WriteString("\n")
 		sb.WriteString(renderHelp(
@@ -61,7 +61,7 @@ func (m Model) viewSourceColumns() string {
 	visibleCount := MaxVisibleColumns
 
 	// Calculate visible range centered on cursor
-	startIdx := m.columnCursor - visibleCount/2
+	startIdx := m.selection.ColumnCursor - visibleCount/2
 	if startIdx < 0 {
 		startIdx = 0
 	}
@@ -82,12 +82,12 @@ func (m Model) viewSourceColumns() string {
 		}
 
 		checkbox := "[ ]"
-		if m.selectedColumns[col.Name] {
+		if m.selection.SelectedColumns[col.Name] {
 			checkbox = styles.CheckboxChecked.Render("[✓]")
 		}
 
 		line := fmt.Sprintf("%s %-25s %s", checkbox, col.Name, col.DataType)
-		if i == m.columnCursor {
+		if i == m.selection.ColumnCursor {
 			sb.WriteString(styles.SelectedItem.Render("▸ " + line))
 		} else {
 			sb.WriteString(styles.ListItem.Render("  " + line))
@@ -103,21 +103,21 @@ func (m Model) viewSourceColumns() string {
 
 	// Count selected
 	selected := 0
-	for _, v := range m.selectedColumns {
+	for _, v := range m.selection.SelectedColumns {
 		if v {
 			selected++
 		}
 	}
 
 	sb.WriteString(fmt.Sprintf("\n%d columns selected", selected))
-	if m.searchMode && len(m.searchQuery) > 0 {
+	if m.ui.SearchMode && len(m.ui.SearchQuery) > 0 {
 		sb.WriteString(fmt.Sprintf(" (%d matches)\n", len(columns)))
 	} else {
 		sb.WriteString("\n")
 	}
 
 	// Different help text depending on mode
-	if m.searchMode {
+	if m.ui.SearchMode {
 		sb.WriteString(renderHelp(
 			helpItem{Key: "Type", Description: "Search"},
 			helpItem{Key: "Backspace", Description: "Delete"},
@@ -143,45 +143,45 @@ func (m Model) viewSourceColumns() string {
 // handleSourceColumnsKeys handles key presses on the source columns screen
 func (m Model) handleSourceColumnsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle search mode
-	if m.searchMode {
+	if m.ui.SearchMode {
 		switch msg.String() {
 		case "q":
 			m.quitting = true
 			return m, tea.Quit
 		case "esc":
 			// Exit search mode
-			m.searchMode = false
-			m.searchQuery = ""
-			m.filteredColumns = nil
-			m.columnCursor = 0
+			m.ui.SearchMode = false
+			m.ui.SearchQuery = ""
+			m.ui.FilteredColumns = nil
+			m.selection.ColumnCursor = 0
 		case "backspace":
-			if len(m.searchQuery) > 0 {
-				m.searchQuery = m.searchQuery[:len(m.searchQuery)-1]
+			if len(m.ui.SearchQuery) > 0 {
+				m.ui.SearchQuery = m.ui.SearchQuery[:len(m.ui.SearchQuery)-1]
 				m.filterColumns()
 			}
 		case "up", "k":
 			// Navigate in filtered results
-			if m.columnCursor > 0 {
-				m.columnCursor--
+			if m.selection.ColumnCursor > 0 {
+				m.selection.ColumnCursor--
 			}
 		case "down", "j":
 			// Navigate in filtered results
-			columns := m.filteredColumns
-			if len(columns) > 0 && m.columnCursor < len(columns)-1 {
-				m.columnCursor++
+			columns := m.ui.FilteredColumns
+			if len(columns) > 0 && m.selection.ColumnCursor < len(columns)-1 {
+				m.selection.ColumnCursor++
 			}
 		case " ":
 			// Toggle selection in filtered results
-			if len(m.filteredColumns) > 0 && m.columnCursor < len(m.filteredColumns) {
-				col := m.filteredColumns[m.columnCursor]
+			if len(m.ui.FilteredColumns) > 0 && m.selection.ColumnCursor < len(m.ui.FilteredColumns) {
+				col := m.ui.FilteredColumns[m.selection.ColumnCursor]
 				if !col.IsPrimaryKey {
-					m.selectedColumns[col.Name] = !m.selectedColumns[col.Name]
+					m.selection.SelectedColumns[col.Name] = !m.selection.SelectedColumns[col.Name]
 				}
 			}
 		default:
 			// Add character to search query (only single chars)
 			if len(msg.String()) == 1 && msg.String() != "/" {
-				m.searchQuery += msg.String()
+				m.ui.SearchQuery += msg.String()
 				m.filterColumns()
 			}
 		}
@@ -195,37 +195,37 @@ func (m Model) handleSourceColumnsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "/":
 		// Enter search mode
-		m.searchMode = true
-		m.searchQuery = ""
-		m.filteredColumns = nil
-		m.columnCursor = 0
+		m.ui.SearchMode = true
+		m.ui.SearchQuery = ""
+		m.ui.FilteredColumns = nil
+		m.selection.ColumnCursor = 0
 	case "up", "k":
-		if m.columnCursor > 0 {
-			m.columnCursor--
+		if m.selection.ColumnCursor > 0 {
+			m.selection.ColumnCursor--
 		}
 	case "down", "j":
-		if m.columnCursor < len(m.mysqlColumns)-1 {
-			m.columnCursor++
+		if m.selection.ColumnCursor < len(m.data.MySQLColumns)-1 {
+			m.selection.ColumnCursor++
 		}
 	case " ":
-		if len(m.mysqlColumns) > 0 {
-			col := m.mysqlColumns[m.columnCursor]
+		if len(m.data.MySQLColumns) > 0 {
+			col := m.data.MySQLColumns[m.selection.ColumnCursor]
 			if !col.IsPrimaryKey {
-				m.selectedColumns[col.Name] = !m.selectedColumns[col.Name]
+				m.selection.SelectedColumns[col.Name] = !m.selection.SelectedColumns[col.Name]
 			}
 		}
 	case "a":
-		for _, col := range m.mysqlColumns {
+		for _, col := range m.data.MySQLColumns {
 			if !col.IsPrimaryKey {
-				m.selectedColumns[col.Name] = true
+				m.selection.SelectedColumns[col.Name] = true
 			}
 		}
 	case "n":
-		m.selectedColumns = make(map[string]bool)
+		m.selection.SelectedColumns = make(map[string]bool)
 	case "enter":
 		// Check at least one column selected
 		hasSelection := false
-		for _, v := range m.selectedColumns {
+		for _, v := range m.selection.SelectedColumns {
 			if v {
 				hasSelection = true
 				break
@@ -234,15 +234,15 @@ func (m Model) handleSourceColumnsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if hasSelection {
 			// Build selected columns list
 			var selectedCols []string
-			for _, col := range m.mysqlColumns {
-				if m.selectedColumns[col.Name] && !col.IsPrimaryKey {
+			for _, col := range m.data.MySQLColumns {
+				if m.selection.SelectedColumns[col.Name] && !col.IsPrimaryKey {
 					selectedCols = append(selectedCols, col.Name)
 				}
 			}
 
 			// Get PK
 			var pkCol string
-			for _, col := range m.mysqlColumns {
+			for _, col := range m.data.MySQLColumns {
 				if col.IsPrimaryKey {
 					pkCol = col.Name
 					break
@@ -254,7 +254,7 @@ func (m Model) handleSourceColumnsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.config.Migration.Source.PrimaryKey = pkCol
 			m.config.Save()
 
-			m.tableCursor = 0 // Reset for target table selection
+			m.selection.TableCursor = 0 // Reset for target table selection
 			m.screen = ScreenTargetTable
 		}
 	}
