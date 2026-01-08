@@ -289,6 +289,14 @@ pgpipe → Resume → Another 100 batches → ...
 - **Connection lost**: Migration pauses, prompts to retry or quit
 - **User quit**: State is saved, can resume later
 
+## TUI Architecture & Refactor Notes
+
+- **Screen decomposition**: Break `internal/tui/screens.go` into focused screen modules (welcome, connections, source selection, mapping, settings, running, summary) plus reusable widgets (list/search, numeric input, mapping editor, footer/help renderer). Keep the root model as a router/compositor.
+- **Async orchestration**: Move migration start-up (state load/save, PK/rowcount discovery, migrator creation) into a coordinator/service invoked via `tea.Cmd`, keeping UI update/view functions fast.
+- **Keybinding policy**: Keep `Enter` for selection/advance only; use a dedicated action key for “start migration” (or a clearly labeled button) to avoid overloaded semantics. Avoid per-screen key drift; add new keys centrally.
+- **Help rendering**: Use a shared helper to render key legends from structured data instead of hardcoded strings per screen. Every screen should call the helper with its bindings to keep output consistent.
+- **Testing focus**: Improve mocks so batch fetching returns data; add migrator tests that exercise `Run` with transforms/skip paths; consider `teatest` for navigation and start/stop flows.
+
 ## Future Enhancements (v2)
 
 - [ ] Automatic table creation with index replication

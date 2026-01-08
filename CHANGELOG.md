@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Centralized TUI help/footer rendering with structured keybinding definitions.
+- Stabilized settings screen input: `Enter` reserved for editing/selection, `s` starts migration.
+- Documented refactor guidance (screen decomposition, keybinding policy, help rendering) in DESIGN.
+
 ## [0.1.0] - 2024-01-08
 
 ### Added

@@ -85,7 +85,11 @@ func (m Model) viewWelcome() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(styles.Help.Render("[↑/↓] Navigate  [Enter] Select  [q] Quit"))
+	sb.WriteString(renderHelp(
+		helpItem{Key: "↑/↓", Description: "Navigate"},
+		helpItem{Key: "Enter", Description: "Select"},
+		helpItem{Key: "q", Description: "Quit"},
+	))
 
 	return sb.String()
 }
@@ -298,9 +302,15 @@ func (m Model) viewConnections() string {
 	sb.WriteString("\n\n")
 
 	if m.mysqlConnected && m.pgConnected {
-		sb.WriteString(styles.Help.Render("[Enter] Continue  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Enter", Description: "Continue"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else if m.mysqlError != "" || m.pgError != "" {
-		sb.WriteString(styles.Help.Render("[r] Retry  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "r", Description: "Retry"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
 		sb.WriteString(styles.Help.Render("Connecting..."))
 	}
@@ -355,7 +365,11 @@ func (m Model) viewSourceTable() string {
 	if m.tableSearchMode && len(m.tableSearchQuery) > 0 && len(tables) == 0 {
 		sb.WriteString(styles.StatusWarning.Render("No tables match your search\n"))
 		sb.WriteString("\n")
-		sb.WriteString(styles.Help.Render("[Backspace] Clear search  [Esc] Exit search  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Backspace", Description: "Clear search"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 		return sb.String()
 	}
 
@@ -392,9 +406,19 @@ func (m Model) viewSourceTable() string {
 
 	// Different help text depending on mode
 	if m.tableSearchMode {
-		sb.WriteString(styles.Help.Render("[Type to search]  [Backspace] Delete  [Esc] Exit search  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Type", Description: "Search"},
+			helpItem{Key: "Backspace", Description: "Delete"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
-		sb.WriteString(styles.Help.Render("[/] Search  [↑/↓] Navigate  [Enter] Select  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "/", Description: "Search"},
+			helpItem{Key: "↑/↓", Description: "Navigate"},
+			helpItem{Key: "Enter", Description: "Select"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	}
 
 	return sb.String()
@@ -549,7 +573,11 @@ func (m Model) viewSourceColumns() string {
 	if m.searchMode && len(m.searchQuery) > 0 && len(columns) == 0 {
 		sb.WriteString(styles.StatusWarning.Render("No columns match your search\n"))
 		sb.WriteString("\n")
-		sb.WriteString(styles.Help.Render("[Backspace] Clear search  [Esc] Exit search  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Backspace", Description: "Clear search"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 		return sb.String()
 	}
 
@@ -615,9 +643,23 @@ func (m Model) viewSourceColumns() string {
 
 	// Different help text depending on mode
 	if m.searchMode {
-		sb.WriteString(styles.Help.Render("[Type to search]  [Backspace] Delete  [Esc] Exit search  [Space] Toggle  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Type", Description: "Search"},
+			helpItem{Key: "Backspace", Description: "Delete"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "Space", Description: "Toggle"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
-		sb.WriteString(styles.Help.Render("[/] Search  [↑/↓] Navigate  [Space] Toggle  [Enter] Continue  [a] All  [n] None  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "/", Description: "Search"},
+			helpItem{Key: "↑/↓", Description: "Navigate"},
+			helpItem{Key: "Space", Description: "Toggle"},
+			helpItem{Key: "Enter", Description: "Continue"},
+			helpItem{Key: "a", Description: "All"},
+			helpItem{Key: "n", Description: "None"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	}
 
 	return sb.String()
@@ -775,7 +817,11 @@ func (m Model) viewTargetTable() string {
 	if m.tableSearchMode && len(m.tableSearchQuery) > 0 && len(tables) == 0 {
 		sb.WriteString(styles.StatusWarning.Render("No tables match your search\n"))
 		sb.WriteString("\n")
-		sb.WriteString(styles.Help.Render("[Backspace] Clear search  [Esc] Exit search  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Backspace", Description: "Clear search"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 		return sb.String()
 	}
 
@@ -811,9 +857,20 @@ func (m Model) viewTargetTable() string {
 
 	// Different help text depending on mode
 	if m.tableSearchMode {
-		sb.WriteString(styles.Help.Render("[Type to search]  [Backspace] Delete  [Esc] Exit search  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Type", Description: "Search"},
+			helpItem{Key: "Backspace", Description: "Delete"},
+			helpItem{Key: "Esc", Description: "Exit search"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
-		sb.WriteString(styles.Help.Render("[/] Search  [↑/↓] Navigate  [Enter] Select  [Esc] Back  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "/", Description: "Search"},
+			helpItem{Key: "↑/↓", Description: "Navigate"},
+			helpItem{Key: "Enter", Description: "Select"},
+			helpItem{Key: "Esc", Description: "Back"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	}
 
 	return sb.String()
@@ -984,7 +1041,13 @@ func (m Model) viewMapping() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(styles.Help.Render("[↑/↓] Navigate  [Enter] Edit  [c] Continue  [Esc] Back  [q] Quit"))
+	sb.WriteString(renderHelp(
+		helpItem{Key: "↑/↓", Description: "Navigate"},
+		helpItem{Key: "Enter", Description: "Edit"},
+		helpItem{Key: "c", Description: "Continue"},
+		helpItem{Key: "Esc", Description: "Back"},
+		helpItem{Key: "q", Description: "Quit"},
+	))
 
 	return sb.String()
 }
@@ -1108,7 +1171,12 @@ func (m Model) viewMappingEditor() string {
 	}
 
 	sb.WriteString("\n")
-	sb.WriteString(styles.Help.Render("[↑/↓] Navigate  [Enter] Select  [Esc] Cancel  [q] Quit"))
+	sb.WriteString(renderHelp(
+		helpItem{Key: "↑/↓", Description: "Navigate"},
+		helpItem{Key: "Enter", Description: "Select"},
+		helpItem{Key: "Esc", Description: "Cancel"},
+		helpItem{Key: "q", Description: "Quit"},
+	))
 
 	return sb.String()
 }
@@ -1278,7 +1346,7 @@ func (m Model) viewSettings() string {
 	sb.WriteString("\n\n")
 
 	// Add "Start Migration" button
-	startLine := "▶ Start Migration"
+	startLine := fmt.Sprintf("▶ Start Migration (press %s)", "s")
 	if m.settingsCursor == 3 {
 		sb.WriteString(styles.SelectedItem.Render("▸ " + startLine))
 	} else {
@@ -1289,9 +1357,23 @@ func (m Model) viewSettings() string {
 
 	// Different help text depending on mode
 	if m.editingBatchSize || m.editingBatchLimit {
-		sb.WriteString(styles.Help.Render("[Type number]  [Backspace] Delete  [Enter] Confirm  [Esc] Cancel  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Type", Description: "Number"},
+			helpItem{Key: "Backspace", Description: "Delete"},
+			helpItem{Key: "Enter", Description: "Confirm"},
+			helpItem{Key: "Esc", Description: "Cancel"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
-		sb.WriteString(styles.Help.Render("[↑/↓] Navigate  [←/→] Adjust  [Enter] Edit/Start  [Space] Toggle  [Esc] Back  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "↑/↓", Description: "Navigate"},
+			helpItem{Key: "←/→", Description: "Adjust"},
+			helpItem{Key: "Enter", Description: "Edit"},
+			helpItem{Key: "Space", Description: "Toggle"},
+			helpItem{Key: "s", Description: "Start migration"},
+			helpItem{Key: "Esc", Description: "Back"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	}
 
 	return sb.String()
@@ -1422,7 +1504,9 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.runMode = migration.RunModeBatches
 			m.editingBatchLimit = true
 			m.inputBuffer = fmt.Sprintf("%d", m.batchLimit)
-		} else if m.settingsCursor == 3 {
+		}
+	case "s":
+		if !m.editingBatchSize && !m.editingBatchLimit {
 			// Save final settings before starting
 			m.config.Migration.Settings.BatchSize = m.batchSize
 			m.config.Save()
@@ -1646,9 +1730,14 @@ func (m Model) viewRunning() string {
 	if m.state.IsComplete() {
 		sb.WriteString(styles.StatusSuccess.Render("✓ Migration complete!"))
 		sb.WriteString("\n\n")
-		sb.WriteString(styles.Help.Render("[Enter] View Summary  [q] Quit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Enter", Description: "View Summary"},
+			helpItem{Key: "q", Description: "Quit"},
+		))
 	} else {
-		sb.WriteString(styles.Help.Render("[q] Quit (progress saved)"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "q", Description: "Quit (progress saved)"},
+		))
 	}
 
 	return sb.String()
@@ -1681,7 +1770,9 @@ func (m Model) viewSummary() string {
 
 	if m.state == nil {
 		sb.WriteString("No migration data available.\n")
-		sb.WriteString(styles.Help.Render("[Enter] Exit"))
+		sb.WriteString(renderHelp(
+			helpItem{Key: "Enter", Description: "Exit"},
+		))
 		return sb.String()
 	}
 
@@ -1740,7 +1831,9 @@ func (m Model) viewSummary() string {
 		sb.WriteString("Run `pgpipe` again to continue migration.\n\n")
 	}
 
-	sb.WriteString(styles.Help.Render("[Enter] Exit"))
+	sb.WriteString(renderHelp(
+		helpItem{Key: "Enter", Description: "Exit"},
+	))
 
 	return sb.String()
 }
