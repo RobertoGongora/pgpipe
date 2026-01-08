@@ -38,8 +38,8 @@ type Model struct {
 	screen      Screen
 	config      *config.Config
 	state       *migration.State
-	mysqlClient *db.MySQLClient
-	pgClient    *db.PostgresClient
+	mysqlClient db.MySQLClientInterface
+	pgClient    db.PostgresClientInterface
 	err         error
 	width       int
 	height      int
@@ -196,6 +196,23 @@ type MigrationDoneMsg struct {
 	err error
 }
 
+// MigrationStartedMsg is sent when migration is initialized
+type MigrationStartedMsg struct {
+	migrator *migration.Migrator
+	state    *migration.State
+	done     chan error // Channel that signals when migration completes
+}
+
+// MigrationInitializingMsg is sent to show initialization progress
+type MigrationInitializingMsg struct {
+	message string
+}
+
+// MigrationInitErrorMsg is sent when initialization fails
+type MigrationInitErrorMsg struct {
+	err error
+}
+
 // TickMsg is sent periodically during migration
 type TickMsg struct{}
 
@@ -239,11 +256,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
-		// Auto-select all columns by default
-		for _, col := range msg.columns {
-			if !col.IsPrimaryKey {
-				m.selectedColumns[col.Name] = true
+		// Auto-select all columns by default (but only if not resuming)
+		if len(m.selectedColumns) == 0 {
+			for _, col := range msg.columns {
+				if !col.IsPrimaryKey {
+					m.selectedColumns[col.Name] = true
+				}
 			}
+		}
+		// If we're on Connections screen and have both clients, we're resuming
+		// Wait for PG columns then auto-advance to Settings
+		if m.screen == ScreenConnections && m.pgColumns != nil {
+			m.screen = ScreenSettings
 		}
 		return m, nil
 
@@ -252,8 +276,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.err = msg.err
 		}
-		// Auto-generate mappings
-		m.generateAutoMappings()
+		// Auto-generate mappings (but only if not resuming with saved mappings)
+		if len(m.columnMappings) == 0 {
+			m.generateAutoMappings()
+		}
+		// If we're on Connections screen and have both clients, we're resuming
+		// Auto-advance to Settings
+		if m.screen == ScreenConnections && m.mysqlColumns != nil {
+			m.screen = ScreenSettings
+		}
 		return m, nil
 
 	case MigrationProgressMsg:
@@ -267,6 +298,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.screen = ScreenSummary
 		return m, nil
+
+	case MigrationInitializingMsg:
+		// Update the initialization progress message
+		m.err = fmt.Errorf(msg.message) // Reuse err field for progress display
+		return m, nil
+
+	case MigrationInitErrorMsg:
+		// Initialization failed - show error
+		m.err = msg.err
+		m.screen = ScreenSummary
+		return m, nil
+
+	case MigrationStartedMsg:
+		// Store the migrator and state that were created in the command
+		m.migrator = msg.migrator
+		m.state = msg.state
+		m.err = nil // Clear any initialization progress messages
+		// Start TWO commands:
+		// 1. Tick loop for UI updates
+		// 2. Completion listener that waits on the done channel
+		return m, tea.Batch(
+			tickAfter(500*time.Millisecond),
+			waitForMigrationCompletion(msg.done),
+		)
 
 	case TickMsg:
 		// Only process ticks when migration is running
@@ -501,4 +556,12 @@ func tickAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(t time.Time) tea.Msg {
 		return TickMsg{}
 	})
+}
+
+// waitForMigrationCompletion returns a command that waits for the migration to complete
+func waitForMigrationCompletion(done chan error) tea.Cmd {
+	return func() tea.Msg {
+		err := <-done // Block until migration completes
+		return MigrationDoneMsg{err: err}
+	}
 }

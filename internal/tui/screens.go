@@ -109,11 +109,13 @@ func (m Model) handleWelcomeKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if hasState && m.resumeChoice == 0 {
 			// Resume existing migration - jump to settings
+			// Config and state are already loaded in NewModel()
 			m.screen = ScreenSettings
 			return m, m.connectDatabases
 		} else if hasConfig && m.resumeChoice == 0 {
-			// Use saved config - jump to connections but config is pre-loaded
-			m.screen = ScreenConnections
+			// Use saved config - config is already loaded in NewModel()
+			// Jump to settings since everything is pre-configured
+			m.screen = ScreenSettings
 			return m, m.connectDatabases
 		} else if (hasState || hasConfig) && m.resumeChoice == 1 {
 			// Start fresh - delete state and config
@@ -208,6 +210,15 @@ func (m Model) handleConnectionTest(msg ConnectionTestMsg) (Model, tea.Cmd) {
 
 	// Load tables if both connected
 	if m.mysqlConnected && m.pgConnected {
+		// Check if we're resuming with pre-configured tables
+		if m.sourceTable != "" && m.targetTable != "" && len(m.columnMappings) > 0 {
+			// We're resuming - load the columns for the saved tables
+			return m, tea.Batch(
+				m.loadMySQLColumns,
+				m.loadPGColumns,
+			)
+		}
+		// Normal flow - load table lists
 		return m, tea.Batch(m.loadMySQLTables, m.loadPGTables)
 	}
 
@@ -1418,7 +1429,7 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			// Start migration
 			m.screen = ScreenRunning
-			return m, m.startMigration
+			return m, m.startMigration()
 		}
 	case " ":
 		// Toggle run mode with space
@@ -1435,95 +1446,143 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // Running Screen
 // ============================================================================
 
-func (m Model) startMigration() tea.Msg {
-	// Build source columns list
-	var sourceColumns []string
-	var targetColumns []string
-	for _, mapping := range m.columnMappings {
-		if mapping.Target != "" {
-			sourceColumns = append(sourceColumns, mapping.Source)
-			targetColumns = append(targetColumns, mapping.Target)
-		}
-	}
+func (m Model) startMigration() tea.Cmd {
+	// Capture all values we need from the model
+	// This is necessary because the command runs asynchronously
+	mysqlClient := m.mysqlClient
+	pgClient := m.pgClient
+	sourceTable := m.sourceTable
+	targetTable := m.targetTable
+	columnMappings := m.columnMappings
+	batchSize := m.batchSize
+	runMode := m.runMode
+	batchLimit := m.batchLimit
+	mysqlColumns := m.mysqlColumns
+	existingState := m.state
+	hasExistingState := m.hasExistingState
 
-	// Get primary key
-	var pkColumn string
-	for _, col := range m.mysqlColumns {
-		if col.IsPrimaryKey {
-			pkColumn = col.Name
-			break
+	// Return a command that does ALL the work asynchronously
+	// This function will run in a goroutine by Bubble Tea
+	return func() tea.Msg {
+		// Build source columns list
+		var sourceColumns []string
+		var targetColumns []string
+		for _, mapping := range columnMappings {
+			if mapping.Target != "" {
+				sourceColumns = append(sourceColumns, mapping.Source)
+				targetColumns = append(targetColumns, mapping.Target)
+			}
 		}
-	}
 
-	// Create or load state
-	var state *migration.State
-	if m.state != nil && m.hasExistingState {
-		state = m.state
-	} else {
-		cfg := &config.Config{
-			Migration: config.MigrationConfig{
-				Source: config.SourceConfig{
-					Table:      m.sourceTable,
-					PrimaryKey: pkColumn,
-					Columns:    sourceColumns,
+		// Get primary key
+		var pkColumn string
+		for _, col := range mysqlColumns {
+			if col.IsPrimaryKey {
+				pkColumn = col.Name
+				break
+			}
+		}
+
+		// Create or load state
+		var state *migration.State
+		if existingState != nil && hasExistingState {
+			// Resuming - fast path, no DB calls needed
+			state = existingState
+		} else {
+			// New migration - need to initialize
+			newCfg := &config.Config{
+				Migration: config.MigrationConfig{
+					Source: config.SourceConfig{
+						Table:      sourceTable,
+						PrimaryKey: pkColumn,
+						Columns:    sourceColumns,
+					},
+					Target: config.TargetConfig{
+						Table: targetTable,
+					},
+					Mapping: columnMappings,
+					Settings: config.SettingsConfig{
+						BatchSize: batchSize,
+					},
 				},
-				Target: config.TargetConfig{
-					Table: m.targetTable,
-				},
-				Mapping: m.columnMappings,
-				Settings: config.SettingsConfig{
-					BatchSize: m.batchSize,
-				},
-			},
+			}
+			state = migration.NewState(newCfg.Hash())
+
+			// Initialize source info - THESE ARE THE SLOW OPERATIONS
+			// But now they run in a goroutine so UI stays responsive!
+			ctx := context.Background()
+
+			// Progress indicator 1: Counting rows
+			totalRows, err := mysqlClient.GetTableRowCount(ctx, sourceTable)
+			if err != nil {
+				return MigrationInitErrorMsg{
+					err: fmt.Errorf("failed to count rows: %w", err),
+				}
+			}
+
+			// Progress indicator 2: Getting ID range
+			minID, maxID, err := mysqlClient.GetMinMaxID(ctx, sourceTable, pkColumn)
+			if err != nil {
+				return MigrationInitErrorMsg{
+					err: fmt.Errorf("failed to get ID range: %w", err),
+				}
+			}
+
+			state.Source = migration.SourceState{
+				Table:      sourceTable,
+				TotalRows:  totalRows,
+				PrimaryKey: pkColumn,
+				MinID:      minID,
+				MaxID:      maxID,
+			}
+			state.Batches.Size = batchSize
 		}
-		state = migration.NewState(cfg.Hash())
 
-		// Initialize source info
-		ctx := context.Background()
-		totalRows, _ := m.mysqlClient.GetTableRowCount(ctx, m.sourceTable)
-		minID, maxID, _ := m.mysqlClient.GetMinMaxID(ctx, m.sourceTable, pkColumn)
-
-		state.Source = migration.SourceState{
-			Table:      m.sourceTable,
-			TotalRows:  totalRows,
-			PrimaryKey: pkColumn,
-			MinID:      minID,
-			MaxID:      maxID,
+		// Create migrator
+		migCfg := migration.MigrationConfig{
+			SourceTable:   sourceTable,
+			TargetTable:   targetTable,
+			SourcePK:      pkColumn,
+			SourceColumns: sourceColumns,
+			TargetColumns: targetColumns,
+			Mapping:       columnMappings,
+			BatchSize:     batchSize,
+			Mode:          runMode,
+			BatchLimit:    batchLimit,
 		}
-		state.Batches.Size = m.batchSize
+
+		migrator, err := migration.NewMigrator(mysqlClient, pgClient, migCfg, state)
+		if err != nil {
+			return MigrationInitErrorMsg{
+				err: fmt.Errorf("failed to create migrator: %w", err),
+			}
+		}
+
+		// Create done channel for completion notification
+		done := make(chan error, 1)
+
+		// Run migration in goroutine
+		go func() {
+			migration.LogDebug("[GOROUTINE] Migration goroutine started")
+			ctx := context.Background()
+			err := migrator.Run(ctx)
+			if err != nil {
+				migration.LogDebug("[GOROUTINE] Migration completed with ERROR: %v", err)
+			} else {
+				migration.LogDebug("[GOROUTINE] Migration completed successfully")
+			}
+			// Send completion signal with any error
+			done <- err
+			migration.LogDebug("[GOROUTINE] Sent completion signal to channel")
+		}()
+
+		// Return success - migrator is ready!
+		return MigrationStartedMsg{
+			migrator: migrator,
+			state:    state,
+			done:     done,
+		}
 	}
-
-	m.state = state
-
-	// Create migrator
-	migCfg := migration.MigrationConfig{
-		SourceTable:   m.sourceTable,
-		TargetTable:   m.targetTable,
-		SourcePK:      pkColumn,
-		SourceColumns: sourceColumns,
-		TargetColumns: targetColumns,
-		Mapping:       m.columnMappings,
-		BatchSize:     m.batchSize,
-		Mode:          m.runMode,
-		BatchLimit:    m.batchLimit,
-	}
-
-	migrator, err := migration.NewMigrator(m.mysqlClient, m.pgClient, migCfg, state)
-	if err != nil {
-		return MigrationDoneMsg{err: err}
-	}
-
-	// Run migration in goroutine
-	go func() {
-		ctx := context.Background()
-		err := migrator.Run(ctx)
-		// Send done message - but we can't easily do this without a program reference
-		// For now, the migration runs and we check completion in the view
-		_ = err
-	}()
-
-	m.migrator = migrator
-	return TickMsg{}
 }
 
 func (m Model) viewRunning() string {
@@ -1534,8 +1593,29 @@ func (m Model) viewRunning() string {
 	sb.WriteString(styles.Subtitle.Render(fmt.Sprintf("%s → %s", m.sourceTable, m.targetTable)))
 	sb.WriteString("\n\n")
 
+	// Show initialization status if migrator not ready yet
+	if m.migrator == nil {
+		sb.WriteString(styles.Box.Render("Initializing Migration"))
+		sb.WriteString("\n\n")
+
+		if m.err != nil {
+			// Show progress message (we reuse err field for this)
+			sb.WriteString(m.err.Error())
+			sb.WriteString("\n")
+		} else {
+			sb.WriteString("Preparing migration...\n")
+			sb.WriteString("• Counting rows in source table\n")
+			sb.WriteString("• Calculating ID range\n")
+			sb.WriteString("• Initializing migrator\n")
+		}
+
+		sb.WriteString("\n")
+		sb.WriteString(styles.Help.Render("Please wait..."))
+		return sb.String()
+	}
+
 	if m.state == nil {
-		sb.WriteString("Initializing...\n")
+		sb.WriteString("Loading state...\n")
 		return sb.String()
 	}
 

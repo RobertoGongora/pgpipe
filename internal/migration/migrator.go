@@ -20,15 +20,15 @@ const (
 
 // MigrationConfig holds the configuration for a migration run
 type MigrationConfig struct {
-	SourceTable    string
-	TargetTable    string
-	SourcePK       string
-	SourceColumns  []string
-	TargetColumns  []string
-	Mapping        []config.ColumnMapping
-	BatchSize      int
-	Mode           RunMode
-	BatchLimit     int // Only used when Mode == RunModeBatches
+	SourceTable   string
+	TargetTable   string
+	SourcePK      string
+	SourceColumns []string
+	TargetColumns []string
+	Mapping       []config.ColumnMapping
+	BatchSize     int
+	Mode          RunMode
+	BatchLimit    int // Only used when Mode == RunModeBatches
 }
 
 // MigrationStats holds statistics about the migration progress
@@ -49,20 +49,21 @@ type ProgressCallback func(stats MigrationStats)
 
 // Migrator handles the migration process
 type Migrator struct {
-	mysql       *db.MySQLClient
-	postgres    *db.PostgresClient
-	config      MigrationConfig
-	state       *State
-	errorLogger *ErrorLogger
-	onProgress  ProgressCallback
-	stopChan    chan struct{}
-	stopped     bool
+	mysql         db.MySQLClientInterface
+	postgres      db.PostgresClientInterface
+	config        MigrationConfig
+	state         *State
+	errorLogger   *ErrorLogger
+	onProgress    ProgressCallback
+	stopChan      chan struct{}
+	stopped       bool
+	targetColumns map[string]db.ColumnInfo // Cache of target column metadata
 }
 
 // NewMigrator creates a new migrator instance
 func NewMigrator(
-	mysql *db.MySQLClient,
-	postgres *db.PostgresClient,
+	mysql db.MySQLClientInterface,
+	postgres db.PostgresClientInterface,
 	cfg MigrationConfig,
 	state *State,
 ) (*Migrator, error) {
@@ -71,13 +72,27 @@ func NewMigrator(
 		return nil, fmt.Errorf("failed to create error logger: %w", err)
 	}
 
+	// Load target column metadata for smart default handling
+	ctx := context.Background()
+	targetCols, err := postgres.GetColumns(ctx, cfg.TargetTable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target columns: %w", err)
+	}
+
+	// Build a map for quick lookup
+	targetColMap := make(map[string]db.ColumnInfo)
+	for _, col := range targetCols {
+		targetColMap[col.Name] = col
+	}
+
 	return &Migrator{
-		mysql:       mysql,
-		postgres:    postgres,
-		config:      cfg,
-		state:       state,
-		errorLogger: errorLogger,
-		stopChan:    make(chan struct{}),
+		mysql:         mysql,
+		postgres:      postgres,
+		config:        cfg,
+		state:         state,
+		errorLogger:   errorLogger,
+		stopChan:      make(chan struct{}),
+		targetColumns: targetColMap,
 	}, nil
 }
 
@@ -103,16 +118,22 @@ func (m *Migrator) Run(ctx context.Context) error {
 		maxBatches = m.config.BatchLimit
 	}
 
+	logDebug("[MIGRATION] Starting: mode=%s, batchLimit=%d, maxBatches=%d, cursor=%d, maxID=%d",
+		m.config.Mode, m.config.BatchLimit, maxBatches, m.state.Progress.LastCursor, m.state.Source.MaxID)
+
 	batchCount := 0
 	cursor := m.state.Progress.LastCursor
 
 	for {
+		logDebug("[MIGRATION] Loop: batchCount=%d/%d, cursor=%d", batchCount, maxBatches, cursor)
 		// Check for stop signal
 		select {
 		case <-m.stopChan:
+			logDebug("[MIGRATION] Stop signal received")
 			m.finalize(startTime)
 			return nil
 		case <-ctx.Done():
+			logDebug("[MIGRATION] Context cancelled: %v", ctx.Err())
 			m.finalize(startTime)
 			return ctx.Err()
 		default:
@@ -120,26 +141,33 @@ func (m *Migrator) Run(ctx context.Context) error {
 
 		// Check if we've reached the batch limit
 		if maxBatches > 0 && batchCount >= maxBatches {
+			logDebug("[MIGRATION] Reached batch limit: %d >= %d", batchCount, maxBatches)
 			break
 		}
 
 		// Check if migration is complete
 		if cursor >= m.state.Source.MaxID {
+			logDebug("[MIGRATION] Complete: cursor=%d >= maxID=%d", cursor, m.state.Source.MaxID)
 			break
 		}
 
 		// Process one batch
+		logDebug("[MIGRATION] Processing batch %d: cursor=%d, limit=%d", batchCount+1, cursor, m.config.BatchSize)
 		processed, imported, skipped, lastID, err := m.processBatch(ctx, cursor)
 		if err != nil {
+			logDebug("[MIGRATION] ERROR: Batch failed: %v", err)
 			m.finalize(startTime)
 			return fmt.Errorf("batch processing failed: %w", err)
 		}
+
+		logDebug("[MIGRATION] Batch %d complete: processed=%d, imported=%d, skipped=%d, lastID=%d",
+			batchCount+1, processed, imported, skipped, lastID)
 
 		// Update state
 		m.state.UpdateAfterBatch(lastID, processed, imported, skipped)
 		if err := m.state.Save(); err != nil {
 			// Log but don't fail - we can recover
-			fmt.Printf("Warning: failed to save state: %v\n", err)
+			logDebug("Warning: failed to save state: %v", err)
 		}
 
 		cursor = lastID
@@ -161,15 +189,20 @@ func (m *Migrator) Run(ctx context.Context) error {
 		}
 	}
 
+	logDebug("[MIGRATION] Exiting loop: batchCount=%d, cursor=%d", batchCount, cursor)
 	m.finalize(startTime)
+	logDebug("[MIGRATION] Finalized successfully")
 	return nil
 }
 
 // processBatch processes a single batch of rows
 func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, imported, skipped int, lastID int64, err error) {
+	logDebug("[BATCH] Fetching from cursor=%d, limit=%d", cursor, m.config.BatchSize)
+
 	// Fetch batch from MySQL
 	rows, err := m.mysql.FetchBatch(ctx, m.config.SourceTable, m.config.SourceColumns, m.config.SourcePK, cursor, m.config.BatchSize)
 	if err != nil {
+		logDebug("[BATCH] ERROR: FetchBatch failed: %v", err)
 		return 0, 0, 0, cursor, fmt.Errorf("failed to fetch batch: %w", err)
 	}
 	defer rows.Close()
@@ -185,7 +218,7 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 		if containsString(m.config.SourceColumns, m.config.SourcePK) {
 			numCols = len(m.config.SourceColumns)
 		}
-		
+
 		scanDest := make([]interface{}, numCols)
 		for i := range scanDest {
 			var v interface{}
@@ -230,13 +263,17 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 	}
 
 	if err := rows.Err(); err != nil {
+		logDebug("[BATCH] ERROR: Row iteration error: %v", err)
 		return processed, imported, skipped, lastID, fmt.Errorf("error iterating rows: %w", err)
 	}
+
+	logDebug("[BATCH] Fetched %d rows, inserting into %s", len(insertRows), m.config.TargetTable)
 
 	// Insert into PostgreSQL
 	if len(insertRows) > 0 {
 		insertedCount, err := m.postgres.InsertBatch(ctx, m.config.TargetTable, m.config.TargetColumns, insertRows)
 		if err != nil {
+			logDebug("[BATCH] Bulk insert failed: %v, trying individual inserts for %d rows", err, len(insertRows))
 			// Try individual inserts and log failures
 			for i, row := range insertRows {
 				_, insertErr := m.postgres.InsertBatch(ctx, m.config.TargetTable, m.config.TargetColumns, [][]interface{}{row})
@@ -247,9 +284,13 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 					imported++
 				}
 			}
+			logDebug("[BATCH] Individual inserts complete: imported=%d, skipped=%d", imported, skipped)
 		} else {
 			imported = insertedCount
+			logDebug("[BATCH] Bulk insert successful: %d rows", insertedCount)
 		}
+	} else {
+		logDebug("[BATCH] No rows to insert (empty batch)")
 	}
 
 	return processed, imported, skipped, lastID, nil
@@ -261,10 +302,10 @@ func (m *Migrator) transformRow(scanDest []interface{}, pkVal int64) ([]interfac
 
 	// Build a map of source values
 	sourceValues := make(map[string]interface{})
-	
+
 	// First value is PK
 	sourceValues[m.config.SourcePK] = pkVal
-	
+
 	// Remaining values map to source columns
 	idx := 1
 	for _, col := range m.config.SourceColumns {
@@ -289,7 +330,8 @@ func (m *Migrator) transformRow(scanDest []interface{}, pkVal int64) ([]interfac
 		}
 
 		if mapping == nil {
-			result[i] = nil
+			// No mapping for this target column - use smart default
+			result[i] = m.getDefaultValueForUnmappedColumn(targetCol)
 			continue
 		}
 
@@ -337,6 +379,55 @@ func (m *Migrator) applyTransform(val interface{}, transform string, pkVal int64
 
 	default:
 		return nil, fmt.Errorf("unknown transform: %s", transform)
+	}
+}
+
+// getDefaultValueForUnmappedColumn returns a safe default value for columns
+// that aren't mapped from the source. This prevents NOT NULL constraint violations.
+func (m *Migrator) getDefaultValueForUnmappedColumn(columnName string) interface{} {
+	// Look up the column metadata
+	colInfo, exists := m.targetColumns[columnName]
+	if !exists {
+		// Column not found in metadata - return nil
+		return nil
+	}
+
+	// If column is nullable, NULL is fine
+	if colInfo.IsNullable {
+		return nil
+	}
+
+	// Column is NOT NULL - need a default value
+
+	// If it has a database default, PostgreSQL will use it (return nil here)
+	if colInfo.HasDefault {
+		return nil
+	}
+
+	// No default defined - we need to provide one
+	// Use type-based defaults to prevent constraint violations
+	switch colInfo.DataType {
+	case "json", "jsonb":
+		// Empty JSON object
+		return "{}"
+	case "text", "varchar", "character varying":
+		// Empty string
+		return ""
+	case "integer", "bigint", "smallint":
+		// Zero
+		return 0
+	case "boolean":
+		// False
+		return false
+	case "timestamp", "timestamp with time zone", "timestamp without time zone":
+		// Current timestamp
+		return time.Now()
+	case "date":
+		// Current date
+		return time.Now()
+	default:
+		// Unknown type - return nil and let it fail with a clear error
+		return nil
 	}
 }
 
