@@ -23,8 +23,8 @@ var (
 		MarginBottom(1)
 
 	Subtitle = lipgloss.NewStyle().
-		Foreground(Secondary).
-		MarginBottom(1)
+			Foreground(Secondary).
+			MarginBottom(1)
 
 	// Box styles
 	Box = lipgloss.NewStyle().
@@ -33,40 +33,40 @@ var (
 		Padding(1, 2)
 
 	FocusedBox = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(Primary).
-		Padding(1, 2)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(Primary).
+			Padding(1, 2)
 
 	// List item styles
 	ListItem = lipgloss.NewStyle().
-		PaddingLeft(2)
+			PaddingLeft(2)
 
 	SelectedItem = lipgloss.NewStyle().
-		PaddingLeft(2).
-		Foreground(Primary).
-		Bold(true)
+			PaddingLeft(2).
+			Foreground(Primary).
+			Bold(true)
 
 	// Status styles
 	StatusSuccess = lipgloss.NewStyle().
-		Foreground(Success)
+			Foreground(Success)
 
 	StatusError = lipgloss.NewStyle().
-		Foreground(Error)
+			Foreground(Error)
 
 	StatusWarning = lipgloss.NewStyle().
-		Foreground(Warning)
+			Foreground(Warning)
 
 	StatusMuted = lipgloss.NewStyle().
-		Foreground(Muted)
+			Foreground(Muted)
 
 	// Progress bar
 	ProgressFilled = lipgloss.NewStyle().
-		Foreground(Success).
-		Background(Success)
+			Foreground(Success).
+			Background(Success)
 
 	ProgressEmpty = lipgloss.NewStyle().
-		Foreground(Muted).
-		Background(Muted)
+			Foreground(Muted).
+			Background(Muted)
 
 	// Help text
 	Help = lipgloss.NewStyle().
@@ -82,37 +82,37 @@ var (
 
 	// Checkboxes
 	Checkbox = lipgloss.NewStyle().
-		Foreground(Primary)
+			Foreground(Primary)
 
 	CheckboxChecked = lipgloss.NewStyle().
-		Foreground(Success)
+			Foreground(Success)
 
 	// Input
 	InputStyle = lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(Muted).
-		Padding(0, 1)
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(Muted).
+			Padding(0, 1)
 
 	InputFocused = lipgloss.NewStyle().
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(Primary).
-		Padding(0, 1)
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(Primary).
+			Padding(0, 1)
 
 	// Table
 	TableHeader = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(Secondary).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderBottom(true).
-		BorderForeground(Muted)
+			Bold(true).
+			Foreground(Secondary).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderBottom(true).
+			BorderForeground(Muted)
 
 	TableCell = lipgloss.NewStyle().
-		Padding(0, 1)
+			Padding(0, 1)
 
 	TableCellSelected = lipgloss.NewStyle().
-		Padding(0, 1).
-		Background(Primary).
-		Foreground(lipgloss.Color("#FFFFFF"))
+				Padding(0, 1).
+				Background(Primary).
+				Foreground(lipgloss.Color("#FFFFFF"))
 )
 
 // FormatNumber formats a number with commas

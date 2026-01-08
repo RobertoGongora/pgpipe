@@ -151,7 +151,7 @@ func (c *MySQLClient) GetPrimaryKey(ctx context.Context, tableName string) (stri
 // GetTableRowCount returns the exact row count for a table
 func (c *MySQLClient) GetTableRowCount(ctx context.Context, tableName string) (int64, error) {
 	query := fmt.Sprintf("SELECT COUNT(*) FROM `%s`", tableName)
-	
+
 	var count int64
 	err := c.db.QueryRowContext(ctx, query).Scan(&count)
 	if err != nil {
@@ -163,9 +163,9 @@ func (c *MySQLClient) GetTableRowCount(ctx context.Context, tableName string) (i
 
 // GetMinMaxID returns the minimum and maximum primary key values
 func (c *MySQLClient) GetMinMaxID(ctx context.Context, tableName, pkColumn string) (int64, int64, error) {
-	query := fmt.Sprintf("SELECT COALESCE(MIN(`%s`), 0), COALESCE(MAX(`%s`), 0) FROM `%s`", 
+	query := fmt.Sprintf("SELECT COALESCE(MIN(`%s`), 0), COALESCE(MAX(`%s`), 0) FROM `%s`",
 		pkColumn, pkColumn, tableName)
-	
+
 	var minID, maxID int64
 	err := c.db.QueryRowContext(ctx, query).Scan(&minID, &maxID)
 	if err != nil {

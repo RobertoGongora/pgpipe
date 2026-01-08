@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	ConfigDir   = ".pgpipe"
-	ConfigFile  = "config.yaml"
-	StateFile   = "state.yaml"
-	LogsDir     = "logs"
+	ConfigDir  = ".pgpipe"
+	ConfigFile = "config.yaml"
+	StateFile  = "state.yaml"
+	LogsDir    = "logs"
 )
 
 // Config represents the main configuration for pgpipe
@@ -101,7 +101,7 @@ func NewDefaultConfig() *Config {
 // Load reads config from the config file, falling back to defaults
 func Load() (*Config, error) {
 	cfg := NewDefaultConfig()
-	
+
 	configPath := filepath.Join(ConfigDir, ConfigFile)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -155,12 +155,12 @@ func EnsureConfigDir() error {
 	if err := os.MkdirAll(ConfigDir, 0755); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
-	
+
 	logsPath := filepath.Join(ConfigDir, LogsDir)
 	if err := os.MkdirAll(logsPath, 0755); err != nil {
 		return fmt.Errorf("failed to create logs directory: %w", err)
 	}
-	
+
 	return nil
 }
 

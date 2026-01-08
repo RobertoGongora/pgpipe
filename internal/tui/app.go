@@ -156,66 +156,6 @@ func (m Model) testConnections() tea.Msg {
 	}
 }
 
-// ConnectionTestMsg is sent after testing connections
-type ConnectionTestMsg struct {
-	mysqlErr error
-	pgErr    error
-}
-
-// MySQLTablesMsg is sent after loading MySQL tables
-type MySQLTablesMsg struct {
-	tables []db.TableInfo
-	err    error
-}
-
-// PGTablesMsg is sent after loading PostgreSQL tables
-type PGTablesMsg struct {
-	tables []db.TableInfo
-	err    error
-}
-
-// MySQLColumnsMsg is sent after loading MySQL columns
-type MySQLColumnsMsg struct {
-	columns []db.ColumnInfo
-	err     error
-}
-
-// PGColumnsMsg is sent after loading PostgreSQL columns
-type PGColumnsMsg struct {
-	columns []db.ColumnInfo
-	err     error
-}
-
-// MigrationProgressMsg is sent during migration
-type MigrationProgressMsg struct {
-	stats migration.MigrationStats
-}
-
-// MigrationDoneMsg is sent when migration completes
-type MigrationDoneMsg struct {
-	err error
-}
-
-// MigrationStartedMsg is sent when migration is initialized
-type MigrationStartedMsg struct {
-	migrator *migration.Migrator
-	state    *migration.State
-	done     chan error // Channel that signals when migration completes
-}
-
-// MigrationInitializingMsg is sent to show initialization progress
-type MigrationInitializingMsg struct {
-	message string
-}
-
-// MigrationInitErrorMsg is sent when initialization fails
-type MigrationInitErrorMsg struct {
-	err error
-}
-
-// TickMsg is sent periodically during migration
-type TickMsg struct{}
-
 // Update handles messages and user input
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -319,7 +259,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 1. Tick loop for UI updates
 		// 2. Completion listener that waits on the done channel
 		return m, tea.Batch(
-			tickAfter(500*time.Millisecond),
+			tickAfter(MigrationTickInterval),
 			waitForMigrationCompletion(msg.done),
 		)
 
@@ -351,7 +291,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Schedule next tick
-			return m, tickAfter(500 * time.Millisecond)
+			return m, tickAfter(MigrationTickInterval)
 		}
 		return m, nil
 	}

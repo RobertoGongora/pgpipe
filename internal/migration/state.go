@@ -52,12 +52,12 @@ type BatchState struct {
 
 // LastRunState holds information about the last run
 type LastRunState struct {
-	Mode              string    `yaml:"mode"` // "batches" or "continuous"
-	BatchesRequested  int       `yaml:"batches_requested,omitempty"`
-	BatchesCompleted  int       `yaml:"batches_completed"`
-	RowsThisRun       int64     `yaml:"rows_this_run"`
-	DurationSeconds   float64   `yaml:"duration_seconds"`
-	EndedAt           time.Time `yaml:"ended_at"`
+	Mode             string    `yaml:"mode"` // "batches" or "continuous"
+	BatchesRequested int       `yaml:"batches_requested,omitempty"`
+	BatchesCompleted int       `yaml:"batches_completed"`
+	RowsThisRun      int64     `yaml:"rows_this_run"`
+	DurationSeconds  float64   `yaml:"duration_seconds"`
+	EndedAt          time.Time `yaml:"ended_at"`
 }
 
 // NewState creates a new migration state

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -162,7 +161,7 @@ func (m Model) connectDatabases() tea.Msg {
 	if err != nil {
 		mysqlErr = err
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ConnectionTimeout)
 		defer cancel()
 		if err := mysqlClient.Ping(ctx); err != nil {
 			mysqlErr = err
@@ -175,7 +174,7 @@ func (m Model) connectDatabases() tea.Msg {
 	if err != nil {
 		pgErr = err
 	} else {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), ConnectionTimeout)
 		defer cancel()
 		if err := pgClient.Ping(ctx); err != nil {
 			pgErr = err
@@ -233,7 +232,7 @@ func (m Model) loadMySQLTables() tea.Msg {
 	if m.mysqlClient == nil {
 		return MySQLTablesMsg{err: fmt.Errorf("not connected")}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
 	tables, err := m.mysqlClient.GetTables(ctx)
 	return MySQLTablesMsg{tables: tables, err: err}
@@ -243,7 +242,7 @@ func (m Model) loadPGTables() tea.Msg {
 	if m.pgClient == nil {
 		return PGTablesMsg{err: fmt.Errorf("not connected")}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
 	tables, err := m.pgClient.GetTables(ctx)
 	return PGTablesMsg{tables: tables, err: err}
@@ -374,7 +373,7 @@ func (m Model) viewSourceTable() string {
 	}
 
 	// Calculate visible range
-	visibleCount := 10
+	visibleCount := MaxVisibleTables
 	startIdx := 0
 	if m.tableCursor >= visibleCount {
 		startIdx = m.tableCursor - visibleCount + 1
@@ -523,7 +522,7 @@ func (m Model) loadMySQLColumns() tea.Msg {
 	if m.mysqlClient == nil || m.sourceTable == "" {
 		return MySQLColumnsMsg{err: fmt.Errorf("not ready")}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
 	columns, err := m.mysqlClient.GetColumns(ctx, m.sourceTable)
 	return MySQLColumnsMsg{columns: columns, err: err}
@@ -582,8 +581,7 @@ func (m Model) viewSourceColumns() string {
 	}
 
 	// Implement scrolling viewport
-	const maxVisibleColumns = 12
-	visibleCount := maxVisibleColumns
+	visibleCount := MaxVisibleColumns
 
 	// Calculate visible range centered on cursor
 	startIdx := m.columnCursor - visibleCount/2
@@ -825,7 +823,7 @@ func (m Model) viewTargetTable() string {
 		return sb.String()
 	}
 
-	visibleCount := 10
+	visibleCount := MaxVisibleTables
 	startIdx := 0
 	if m.tableCursor >= visibleCount {
 		startIdx = m.tableCursor - visibleCount + 1
@@ -982,7 +980,7 @@ func (m Model) loadPGColumns() tea.Msg {
 	if m.pgClient == nil || m.targetTable == "" {
 		return PGColumnsMsg{err: fmt.Errorf("not ready")}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), QueryTimeout)
 	defer cancel()
 	columns, err := m.pgClient.GetColumns(ctx, m.targetTable)
 	return PGColumnsMsg{columns: columns, err: err}
@@ -1121,10 +1119,9 @@ func (m Model) viewMappingEditor() string {
 	sb.WriteString("Select target column:\n\n")
 
 	// Calculate scrolling viewport for target columns
-	const maxVisibleTargets = 10
 	// +1 for skip option at index 0
 	totalOptions := len(m.availableTargets) + 1
-	visibleCount := maxVisibleTargets
+	visibleCount := MaxVisibleTargets
 
 	startIdx := m.editTargetCursor - visibleCount/2
 	if startIdx < 0 {
@@ -1392,13 +1389,11 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Apply value with validation
 			if val, err := strconv.Atoi(m.inputBuffer); err == nil {
-				// Minimum of 1
-				if val < 1 {
-					val = 1
+				if val < MinBatchSize {
+					val = MinBatchSize
 				}
-				// Cap at 32-bit max int (2147483647)
-				if val > 2147483647 {
-					val = 2147483647
+				if val > MaxBatchSize {
+					val = MaxBatchSize
 				}
 				m.batchSize = val
 			}
@@ -1427,13 +1422,11 @@ func (m Model) handleSettingsKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			// Apply value with validation
 			if val, err := strconv.Atoi(m.inputBuffer); err == nil {
-				// Minimum of 1
-				if val < 1 {
-					val = 1
+				if val < MinBatchLimit {
+					val = MinBatchLimit
 				}
-				// Cap at 32-bit max int (2147483647)
-				if val > 2147483647 {
-					val = 2147483647
+				if val > MaxBatchLimit {
+					val = MaxBatchLimit
 				}
 				m.batchLimit = val
 			}

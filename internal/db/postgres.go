@@ -159,7 +159,7 @@ func (c *PostgresClient) GetTableRowCount(ctx context.Context, tableName string)
 	}
 
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM "%s"."%s"`, schema, table)
-	
+
 	var count int64
 	err := c.pool.QueryRow(ctx, query).Scan(&count)
 	if err != nil {
