@@ -1,8 +1,6 @@
 package migration
 
 import (
-	"context"
-	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -12,91 +10,9 @@ import (
 	"github.com/pgpipe/pgpipe/internal/testutil"
 )
 
-// mockMySQLClient is a simple mock for testing migration logic
-type mockMySQLClient struct {
-	tables   []db.TableInfo
-	columns  []db.ColumnInfo
-	rowCount int64
-	minID    int64
-	maxID    int64
-}
-
-func (m *mockMySQLClient) Ping(ctx context.Context) error { return nil }
-func (m *mockMySQLClient) Close() error                   { return nil }
-func (m *mockMySQLClient) GetTables(ctx context.Context) ([]db.TableInfo, error) {
-	return m.tables, nil
-}
-func (m *mockMySQLClient) GetColumns(ctx context.Context, tableName string) ([]db.ColumnInfo, error) {
-	return m.columns, nil
-}
-func (m *mockMySQLClient) GetPrimaryKey(ctx context.Context, tableName string) (string, error) {
-	for _, col := range m.columns {
-		if col.IsPrimaryKey {
-			return col.Name, nil
-		}
-	}
-	return "", fmt.Errorf("no primary key found")
-}
-func (m *mockMySQLClient) GetTableRowCount(ctx context.Context, tableName string) (int64, error) {
-	return m.rowCount, nil
-}
-func (m *mockMySQLClient) GetMinMaxID(ctx context.Context, tableName, pkColumn string) (int64, int64, error) {
-	return m.minID, m.maxID, nil
-}
-func (m *mockMySQLClient) FetchBatch(ctx context.Context, tableName string, columns []string, pkColumn string, cursor int64, limit int) (*sql.Rows, error) {
-	return nil, nil // Not used in these tests
-}
-
-// mockPostgresClient is a simple mock for testing migration logic
-type mockPostgresClient struct {
-	tables        []db.TableInfo
-	columns       []db.ColumnInfo
-	insertedCount int
-}
-
-func (m *mockPostgresClient) Ping(ctx context.Context) error { return nil }
-func (m *mockPostgresClient) Close()                         {}
-func (m *mockPostgresClient) GetTables(ctx context.Context) ([]db.TableInfo, error) {
-	return m.tables, nil
-}
-func (m *mockPostgresClient) GetColumns(ctx context.Context, tableName string) ([]db.ColumnInfo, error) {
-	return m.columns, nil
-}
-func (m *mockPostgresClient) GetPrimaryKey(ctx context.Context, tableName string) (string, error) {
-	for _, col := range m.columns {
-		if col.IsPrimaryKey {
-			return col.Name, nil
-		}
-	}
-	return "", fmt.Errorf("no primary key found")
-}
-func (m *mockPostgresClient) GetTableRowCount(ctx context.Context, tableName string) (int64, error) {
-	return 0, nil
-}
-func (m *mockPostgresClient) InsertBatch(ctx context.Context, tableName string, columns []string, rows [][]interface{}) (int, error) {
-	if m.insertedCount > 0 {
-		return m.insertedCount, nil
-	}
-	return len(rows), nil
-}
-
 // setupTestClients creates mock MySQL and Postgres clients for testing
 func setupTestClients() (db.MySQLClientInterface, db.PostgresClientInterface) {
-	mysqlClient := &mockMySQLClient{
-		tables:   testutil.GenerateMockTableInfo(5),
-		columns:  testutil.GenerateMockColumnInfo(4, true),
-		rowCount: 10000,
-		minID:    1,
-		maxID:    10000,
-	}
-
-	pgClient := &mockPostgresClient{
-		tables:        testutil.GenerateMockTableInfo(5),
-		columns:       testutil.GenerateMockColumnInfo(4, true),
-		insertedCount: 1000,
-	}
-
-	return mysqlClient, pgClient
+	return testutil.NewMockMySQLClient(), testutil.NewMockPostgresClient()
 }
 
 // createTestState creates a test migration state
