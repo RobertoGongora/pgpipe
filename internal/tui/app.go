@@ -2,8 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pgpipe/pgpipe/internal/config"
@@ -363,22 +361,6 @@ func (m *Model) generateAutoMappings() {
 	}
 }
 
-func isTextType(dataType string) bool {
-	switch dataType {
-	case "text", "mediumtext", "longtext", "varchar", "char":
-		return true
-	}
-	return false
-}
-
-func isJSONType(dataType string) bool {
-	switch dataType {
-	case "json", "jsonb":
-		return true
-	}
-	return false
-}
-
 // View renders the current screen
 func (m Model) View() string {
 	if m.quitting {
@@ -411,97 +393,5 @@ func (m Model) View() string {
 		return m.viewSummary()
 	default:
 		return "Unknown screen"
-	}
-}
-
-// Helper to truncate strings
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max-3] + "..."
-}
-
-// Helper to create progress bar
-func progressBar(percent float64, width int) string {
-	filled := int(float64(width) * percent / 100)
-	if filled > width {
-		filled = width
-	}
-	if filled < 0 {
-		filled = 0
-	}
-	empty := width - filled
-	return fmt.Sprintf("[%s%s] %.1f%%",
-		repeatChar('█', filled),
-		repeatChar('░', empty),
-		percent)
-}
-
-func repeatChar(c rune, n int) string {
-	result := make([]rune, n)
-	for i := range result {
-		result[i] = c
-	}
-	return string(result)
-}
-
-// filterColumns filters m.mysqlColumns based on search query
-func (m *Model) filterColumns() {
-	if m.searchQuery == "" {
-		m.filteredColumns = nil
-		return
-	}
-
-	query := strings.ToLower(m.searchQuery)
-	m.filteredColumns = nil
-
-	for _, col := range m.mysqlColumns {
-		if strings.Contains(strings.ToLower(col.Name), query) ||
-			strings.Contains(strings.ToLower(col.DataType), query) {
-			m.filteredColumns = append(m.filteredColumns, col)
-		}
-	}
-
-	// Reset cursor if out of bounds
-	if m.columnCursor >= len(m.filteredColumns) {
-		m.columnCursor = 0
-	}
-}
-
-// filterTables filters tables based on search query
-func (m *Model) filterTables(tables []db.TableInfo) {
-	if m.tableSearchQuery == "" {
-		m.filteredTables = nil
-		return
-	}
-
-	query := strings.ToLower(m.tableSearchQuery)
-	m.filteredTables = nil
-
-	for _, table := range tables {
-		if strings.Contains(strings.ToLower(table.Name), query) {
-			m.filteredTables = append(m.filteredTables, table)
-		}
-	}
-
-	// Reset cursor if out of bounds
-	if m.tableCursor >= len(m.filteredTables) {
-		m.tableCursor = 0
-	}
-}
-
-// tickAfter returns a command that sends TickMsg after duration
-func tickAfter(d time.Duration) tea.Cmd {
-	return tea.Tick(d, func(t time.Time) tea.Msg {
-		return TickMsg{}
-	})
-}
-
-// waitForMigrationCompletion returns a command that waits for the migration to complete
-func waitForMigrationCompletion(done chan error) tea.Cmd {
-	return func() tea.Msg {
-		err := <-done // Block until migration completes
-		return MigrationDoneMsg{err: err}
 	}
 }
