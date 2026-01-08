@@ -1,0 +1,34 @@
+# Binary (in root only, not cmd/pgpipe/)
+/pgpipe
+/bin/
+
+# Runtime data directory
+.pgpipe/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Dependency directories
+vendor/
+
+# Environment files and credentials
+.env
+.env.local
+*.env
+mise.toml

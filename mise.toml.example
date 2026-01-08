@@ -1,0 +1,20 @@
+# Example mise configuration for pgpipe
+# Copy this file to mise.toml and fill in your credentials
+
+[tools]
+go = "latest"
+
+[env]
+# MySQL (source database)
+MYSQL_HOST = "localhost"
+MYSQL_PORT = "3306"
+MYSQL_USER = "root"
+MYSQL_PASSWORD = "your-mysql-password"
+MYSQL_DATABASE = "source_db"
+
+# PostgreSQL (target database)
+PGSQL_HOST = "localhost"
+PGSQL_PORT = "5432"
+PGSQL_USER = "postgres"
+PGSQL_PASSWORD = "your-postgres-password"
+PGSQL_DATABASE = "target_db"
