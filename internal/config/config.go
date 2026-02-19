@@ -202,8 +202,12 @@ func (c *MySQLConfig) DSN() string {
 		c.User, c.Password, c.Host, c.Port, c.Database)
 }
 
-// PostgresDSN returns the PostgreSQL connection string
+// PostgresDSN returns the PostgreSQL connection string.
+// SSL mode is controlled by the PGSQL_SSLMODE environment variable
+// (default: "prefer"). Set PGSQL_SSLMODE=require for Supabase and other
+// hosted providers that mandate SSL.
 func (c *PostgreSQLConfig) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s",
-		c.User, c.Password, c.Host, c.Port, c.Database)
+	sslmode := getEnvOrDefault("PGSQL_SSLMODE", "prefer")
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		c.User, c.Password, c.Host, c.Port, c.Database, sslmode)
 }

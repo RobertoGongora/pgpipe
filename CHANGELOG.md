@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`PGSQL_SSLMODE` env var**: Controls the SSL mode for PostgreSQL connections (default: `prefer`). Set to `require` for Supabase and other hosted providers that mandate SSL. Example: `PGSQL_SSLMODE=require`.
 - **`.env` file support**: pgpipe now automatically loads a `.env` file from the current working directory at startup (using `godotenv.Overload`). Values in `.env` override any already-set shell environment variables, making it easy to manage connection credentials without manually sourcing the file. Works for all modes: TUI, `pgpipe run`, and `pgpipe generate-configs`.
 - **Headless CLI mode**: `pgpipe run [--config=<path>]` runs a full migration without user interaction. Prints per-batch progress to stdout, exits 0 on success, non-zero on fatal error.
 - **Config generator**: `pgpipe generate-configs --output-dir=<dir>` introspects MySQL + PostgreSQL schemas and writes one per-table YAML config file. Supports `--skip`, `--force`. Auto-detects transforms.
