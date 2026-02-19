@@ -32,3 +32,8 @@ vendor/
 .env.local
 *.env
 mise.toml
+
+# Per-table migration configs (local use only)
+configs/
+configs/*.yaml
+configs/.*.state.yaml

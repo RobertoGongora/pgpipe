@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
+
 	"github.com/pgpipe/pgpipe/internal/cli"
 	"github.com/pgpipe/pgpipe/internal/tui"
 )
@@ -19,6 +21,10 @@ Run 'pgpipe <subcommand> --help' for subcommand usage.
 `
 
 func main() {
+	// Load .env from the current working directory (if present).
+	// Overload overwrites any env vars already set in the shell.
+	_ = godotenv.Overload()
+
 	if len(os.Args) < 2 {
 		// No subcommand — launch TUI (default/backward-compatible behaviour)
 		if err := tui.Run(); err != nil {
