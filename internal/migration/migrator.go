@@ -391,6 +391,23 @@ func (m *Migrator) applyTransform(val interface{}, transform string, pkVal int64
 			return nil, fmt.Errorf("int_to_bool: expected int/bool, got %T", val)
 		}
 
+	case "string_to_uuid", "STRING_TO_UUID":
+		// MySQL returns CHAR/VARCHAR columns as []byte when scanning into interface{}.
+		// pgx.CopyFrom cannot encode []byte into a PostgreSQL uuid column directly;
+		// converting to a plain string lets pgx use the text protocol which PostgreSQL
+		// accepts for uuid columns. Format validation is left to PostgreSQL — malformed
+		// values will be caught per-row and logged via the ErrorLogger.
+		switch v := val.(type) {
+		case []byte:
+			return string(v), nil
+		case string:
+			return v, nil
+		case nil:
+			return nil, nil
+		default:
+			return nil, fmt.Errorf("string_to_uuid: expected string/[]byte, got %T", val)
+		}
+
 	case "", "none":
 		// No transform, pass through
 		return val, nil

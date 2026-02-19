@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pgpipe/pgpipe/internal/config"
@@ -18,6 +19,10 @@ type State struct {
 	Progress   ProgressState `yaml:"progress"`
 	Batches    BatchState    `yaml:"batches"`
 	LastRun    LastRunState  `yaml:"last_run"`
+
+	// statePath overrides the default .pgpipe/state.yaml save location.
+	// Not serialised — set at runtime by the CLI when using --config=<path>.
+	statePath string `yaml:"-"`
 }
 
 // SessionState holds session-specific information
@@ -94,8 +99,31 @@ func LoadState() (*State, error) {
 	return &state, nil
 }
 
+// SetStatePath overrides the path used by Save(). When set, Save() writes to
+// this path instead of the default .pgpipe/state.yaml. Use this for per-config
+// state files so that parallel CLI runs don't overwrite each other's state.
+func (s *State) SetStatePath(path string) {
+	s.statePath = path
+}
+
+// resolveSavePath returns the effective path to write state to.
+func (s *State) resolveSavePath() string {
+	if s.statePath != "" {
+		return s.statePath
+	}
+	return filepath.Join(config.ConfigDir, config.StateFile)
+}
+
 // Save writes the state to the state file
 func (s *State) Save() error {
+	savePath := s.resolveSavePath()
+
+	// Ensure the target directory exists
+	if err := os.MkdirAll(filepath.Dir(savePath), 0755); err != nil {
+		return fmt.Errorf("failed to create state directory: %w", err)
+	}
+
+	// Also ensure logs dir exists (needed for ErrorLogger)
 	if err := config.EnsureConfigDir(); err != nil {
 		return err
 	}
@@ -105,12 +133,44 @@ func (s *State) Save() error {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	statePath := filepath.Join(config.ConfigDir, config.StateFile)
-	if err := os.WriteFile(statePath, data, 0600); err != nil {
+	if err := os.WriteFile(savePath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write state file: %w", err)
 	}
 
 	return nil
+}
+
+// LoadStateFromPath reads state from an explicit file path. Returns (nil, nil)
+// if the file does not exist.
+func LoadStateFromPath(path string) (*State, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to read state file: %w", err)
+	}
+
+	var state State
+	if err := yaml.Unmarshal(data, &state); err != nil {
+		return nil, fmt.Errorf("failed to parse state file: %w", err)
+	}
+
+	state.statePath = path
+	return &state, nil
+}
+
+// StatePathForConfig derives a sibling state file path from a config file path.
+// E.g. ./configs/individuals.yaml → ./configs/.individuals.state.yaml
+// The leading dot makes it a hidden file, signalling it is machine-generated.
+func StatePathForConfig(configPath string) string {
+	dir := filepath.Dir(configPath)
+	base := filepath.Base(configPath)
+
+	// Strip extension, prepend dot, append .state.yaml
+	ext := filepath.Ext(base)
+	name := strings.TrimSuffix(base, ext)
+	return filepath.Join(dir, "."+name+".state.yaml")
 }
 
 // Delete removes the state file

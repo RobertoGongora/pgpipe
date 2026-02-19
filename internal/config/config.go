@@ -122,6 +122,31 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
+// LoadFromPath reads a config file from an explicit path, falling back to env
+// var defaults for any fields not present in the file. This allows per-table
+// migration configs that omit the mysql/postgres connection blocks — those are
+// always filled in from the environment.
+func LoadFromPath(path string) (*Config, error) {
+	cfg := NewDefaultConfig()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("config file not found: %s", path)
+		}
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// Expand environment variables in the YAML
+	expanded := os.ExpandEnv(string(data))
+
+	if err := yaml.Unmarshal([]byte(expanded), cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	return cfg, nil
+}
+
 // Save writes the config to the config file
 func (c *Config) Save() error {
 	if err := EnsureConfigDir(); err != nil {

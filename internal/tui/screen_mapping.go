@@ -59,6 +59,9 @@ func (m Model) viewMapping() string {
 		if mapping.Transform == "int_to_bool" {
 			warnings = append(warnings, fmt.Sprintf("⚠ %s: INT → BOOL (0=false, non-zero=true)", mapping.Source))
 		}
+		if mapping.Transform == "string_to_uuid" {
+			warnings = append(warnings, fmt.Sprintf("⚠ %s: CHAR/VARCHAR → UUID (non-UUID strings will be skipped)", mapping.Source))
+		}
 	}
 	if len(warnings) > 0 {
 		sb.WriteString("\n")
@@ -237,10 +240,12 @@ func (m Model) handleMappingEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			// Auto-detect transform
 			sourceCol := m.getSourceColumn(m.selection.ColumnMappings[m.selection.MappingCursor].Source)
-			if sourceCol != nil && isTextType(sourceCol.DataType) && isJSONType(selectedCol.DataType) {
+			if sourceCol != nil && (isTextType(sourceCol.DataType) || isJSONSourceType(sourceCol.DataType)) && isJSONType(selectedCol.DataType) {
 				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "text_to_jsonb"
 			} else if sourceCol != nil && isIntType(sourceCol.DataType) && isBoolType(selectedCol.DataType) {
 				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "int_to_bool"
+			} else if sourceCol != nil && isTextType(sourceCol.DataType) && isUUIDType(selectedCol.DataType) {
+				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "string_to_uuid"
 			} else {
 				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = ""
 			}

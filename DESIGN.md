@@ -1,16 +1,18 @@
 # pgpipe - MySQL to PostgreSQL Migration Tool
 
-A TUI-based tool for migrating data from MySQL to PostgreSQL with cursor-based pagination, resumable migrations, and intelligent column mapping.
+A tool for migrating data from MySQL to PostgreSQL with cursor-based pagination, resumable migrations, and intelligent column mapping. Supports both an interactive TUI wizard and a headless CLI mode for scripted bulk migrations.
 
 ## Features
 
 - **Interactive TUI** - Built with Bubble Tea for a smooth terminal experience
+- **Headless CLI** - `pgpipe run --config=<path>` for scripted/batch migrations without user interaction
+- **Config Generator** - `pgpipe generate-configs` introspects both schemas and writes per-table YAML config files
 - **Smart Column Mapping** - Auto-matches columns by name, user can override
 - **Cursor-Based Pagination** - Efficient pagination using primary key, no OFFSET performance degradation
 - **Resumable Migrations** - State file tracks progress, resume from any point
 - **Batch Control** - Run N batches at a time or continuous mode
 - **Error Handling** - Skip invalid rows (e.g., bad JSON), log errors to JSONL files
-- **TEXT → JSONB Transform** - Validates JSON before inserting into PostgreSQL
+- **Column Transforms** - TEXT → JSONB, INT → BOOL, CHAR/VARCHAR → UUID
 
 ## Installation
 
@@ -48,7 +50,7 @@ export PGSQL_PASSWORD=secret
 export PGSQL_DATABASE=target_db
 ```
 
-### Running pgpipe
+### Running pgpipe (TUI)
 
 ```bash
 pgpipe
@@ -68,35 +70,77 @@ The TUI will guide you through:
 
 If you quit mid-migration or run in batch mode, simply run `pgpipe` again. It will detect the existing state and prompt you to resume or start fresh.
 
+### Headless CLI mode
+
+For scripted or bulk migrations (e.g., migrating 85 tables without user interaction):
+
+```bash
+# Run a single migration from a config file
+pgpipe run --config=./configs/individuals.yaml
+
+# Uses .pgpipe/config.yaml (same as TUI) when no --config flag is given
+pgpipe run
+```
+
+- Prints one progress line per batch to stdout
+- Exits 0 on success, non-zero on fatal error
+- State file lives alongside the config (`./configs/.individuals.state.yaml`) so
+  multiple tables can run concurrently without colliding
+- Resumable: re-running the same command picks up where it left off
+
+### Generating config files
+
+```bash
+pgpipe generate-configs \
+  --output-dir=./configs \
+  --skip=sessions,jobs,failed_jobs,password_resets
+```
+
+- Connects to both databases and introspects all MySQL tables
+- Writes one YAML file per table into `--output-dir`
+- Auto-detects transforms (text_to_jsonb, int_to_bool, string_to_uuid) from column types
+- Skips tables in `--skip` list, tables with no matching PG table, and existing files (unless `--force`)
+- Prints a summary: N generated, M skipped (existing), K skipped (list), J skipped (no PG match)
+
+Generated configs contain only the `migration:` block. Connection details always
+come from the standard env vars (`MYSQL_*`, `PGSQL_*`) at runtime.
+
 ## Architecture
 
 ### Directory Structure
 
 ```
 pgpipe/
-├── cmd/pgpipe/main.go           # Entry point
+├── cmd/pgpipe/main.go           # Entry point — subcommand routing (TUI / run / generate-configs)
 ├── internal/
+│   ├── cli/
+│   │   ├── run.go               # pgpipe run — headless migration command
+│   │   └── generate.go          # pgpipe generate-configs — schema introspection + config generation
 │   ├── config/
-│   │   ├── config.go            # Config struct & loading
-│   │   └── env.go               # Environment variable expansion
+│   │   ├── config.go            # Config struct, Load/LoadFromPath/Save, Hash, DSN helpers
+│   │   └── env.go               # Environment variable helpers
 │   ├── db/
+│   │   ├── interfaces.go        # MySQLClientInterface, PostgresClientInterface
 │   │   ├── mysql.go             # MySQL connection & schema introspection
-│   │   └── postgres.go          # PostgreSQL connection & schema introspection
+│   │   ├── postgres.go          # PostgreSQL connection & schema introspection
+│   │   └── types.go             # Column type detection helpers (IsTextType, IsIntType, etc.)
 │   ├── migration/
-│   │   ├── migrator.go          # Core migration engine
-│   │   ├── state.go             # State file management
-│   │   └── errors.go            # Error logging (JSONL)
+│   │   ├── migrator.go          # Core migration engine — Run, processBatch, applyTransform
+│   │   ├── state.go             # State file management — Load/LoadFromPath, Save, SetStatePath
+│   │   ├── errors.go            # Error logging (JSONL)
+│   │   └── logger.go            # Debug log
 │   └── tui/
-│       ├── app.go               # Main Bubble Tea app
-│       ├── model.go             # App state model
-│       ├── screens/             # Individual screens
-│       ├── components/          # Reusable UI components
+│       ├── app.go               # Main Bubble Tea app, screen routing, generateAutoMappings
+│       ├── model_state.go       # Model sub-structs
+│       ├── messages.go          # tea.Msg types
+│       ├── commands.go          # tea.Cmd functions
+│       ├── helpers.go           # UI utilities + thin wrappers around db.IsXxx
+│       ├── screen_*.go          # One file per screen
 │       └── styles/              # Lipgloss styles
-├── .pgpipe/                     # Runtime directory (created at runtime)
-│   ├── config.yaml              # Saved configuration
-│   ├── state.yaml               # Migration progress
-│   └── logs/                    # Error logs
-│       └── 2024-01-08_10-30-00_errors.jsonl
+├── .pgpipe/                     # Default runtime directory (TUI mode)
+│   ├── config.yaml              # Saved TUI configuration
+│   ├── state.yaml               # Migration progress (TUI / pgpipe run default path)
+│   └── logs/                    # Error logs + debug log
 ├── go.mod
 ├── Makefile
 └── README.md
@@ -138,10 +182,51 @@ migration:
     - source: is_active
       target: is_active
       transform: int_to_bool
+    - source: external_id
+      target: external_id
+      transform: string_to_uuid
     - source: name
       target: name
     - source: origin_id
       target: origin_id
+
+  settings:
+    batch_size: 5000
+```
+
+### Per-table config (migration-only, for use with `pgpipe run --config=`)
+
+Connection details are omitted — they always come from env vars at runtime.
+
+```yaml
+migration:
+  source:
+    table: individuals
+    primary_key: id
+    columns:
+      - id
+      - external_id
+      - name
+      - is_active
+      - enrichment
+
+  target:
+    table: public.individuals
+
+  mapping:
+    - source: id
+      target: id
+    - source: external_id
+      target: external_id
+      transform: string_to_uuid
+    - source: name
+      target: name
+    - source: is_active
+      target: is_active
+      transform: int_to_bool
+    - source: enrichment
+      target: enrichment
+      transform: text_to_jsonb
 
   settings:
     batch_size: 5000
@@ -304,7 +389,8 @@ pgpipe → Resume → Another 100 batches → ...
 
 - [ ] Automatic table creation with index replication
 - [ ] Additional column transforms (dates, enums, etc.)
-- [ ] Parallel batch processing
+- [ ] Parallel batch processing across tables
 - [ ] Dry-run mode
 - [ ] Progress webhook notifications
 - [ ] Docker image
+- [ ] Shell script / Makefile generator for bulk 85-table migrations

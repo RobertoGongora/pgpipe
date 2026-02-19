@@ -271,3 +271,56 @@ func TestApplyTransformIntToBool(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyTransformStringToUuid(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session-uuid")
+
+	cfg := MigrationConfig{
+		SourceTable:   "users",
+		TargetTable:   "users",
+		SourcePK:      "id",
+		SourceColumns: []string{"name"},
+		TargetColumns: []string{"name"},
+		Mapping: []config.ColumnMapping{
+			{Source: "name", Target: "name"},
+		},
+		BatchSize: 1000,
+		Mode:      RunModeContinuous,
+	}
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	const validUUID = "550e8400-e29b-41d4-a716-446655440000"
+
+	tests := []struct {
+		name      string
+		input     interface{}
+		expected  interface{}
+		expectErr bool
+	}{
+		{"[]byte UUID becomes string", []byte(validUUID), validUUID, false},
+		{"string UUID passthrough", validUUID, validUUID, false},
+		{"nil returns nil", nil, nil, false},
+		{"unexpected type errors", int64(42), nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := migrator.applyTransform(tt.input, "string_to_uuid", int64(1))
+			if tt.expectErr {
+				if err == nil {
+					t.Fatalf("Expected error, got nil")
+				}
+				return
+			}
+			testutil.AssertNoError(t, err)
+			if result != tt.expected {
+				t.Errorf("Expected %v (%T), got %v (%T)", tt.expected, tt.expected, result, result)
+			}
+		})
+	}
+}

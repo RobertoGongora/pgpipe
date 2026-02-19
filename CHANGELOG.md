@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Headless CLI mode**: `pgpipe run [--config=<path>]` runs a full migration without user interaction. Prints per-batch progress to stdout, exits 0 on success, non-zero on fatal error.
+- **Config generator**: `pgpipe generate-configs --output-dir=<dir>` introspects MySQL + PostgreSQL schemas and writes one per-table YAML config file. Supports `--skip`, `--force`. Auto-detects transforms.
+- **`string_to_uuid` transform**: Converts MySQL `CHAR(36)`/`VARCHAR(36)` UUID strings to a Go `string` that pgx can encode into PostgreSQL `uuid` columns. Validates format at the DB level (malformed UUIDs are logged per-row via ErrorLogger).
+- **UUID auto-detection in TUI and generator**: `char`/`varchar` source → `uuid` target automatically sets `transform: string_to_uuid`.
+- **`text_to_jsonb` auto-detection for MySQL `json` columns**: MySQL native `json`-typed columns now trigger `transform: text_to_jsonb` when the target is `jsonb` (previously only text/varchar/longtext triggered this).
+- **`db.DetectTransform(srcType, tgtType)`**: Centralised transform detection function in `internal/db/types.go`, used by both TUI and CLI generator.
+- **Per-config state files**: When `pgpipe run --config=./configs/foo.yaml` is used, state is saved to `./configs/.foo.state.yaml` alongside the config file, allowing concurrent runs over 85 tables without state collisions.
+- Subcommand help: `pgpipe --help` prints usage for all subcommands.
+
 ### Changed
+- **Type detection helpers moved to `internal/db/types.go`** as exported functions (`IsTextType`, `IsIntType`, `IsBoolType`, `IsJSONType`, `IsJSONSourceType`, `IsUUIDType`). TUI wrappers in `helpers.go` now delegate to these.
+- `cmd/pgpipe/main.go` now routes subcommands (`run`, `generate-configs`) before falling back to the TUI, maintaining full backward compatibility (`pgpipe` with no arguments still launches the TUI).
+- `config.LoadFromPath(path)` added for loading an explicit config file path (used by CLI mode).
+- `State.SetStatePath(path)` / `LoadStateFromPath(path)` / `StatePathForConfig(configPath)` added to `internal/migration/state.go` for per-config state management.
 - Centralized TUI help/footer rendering with structured keybinding definitions.
 - Stabilized settings screen input: `Enter` reserved for editing/selection, `s` starts migration.
 - Documented refactor guidance (screen decomposition, keybinding policy, help rendering) in DESIGN.

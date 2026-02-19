@@ -85,38 +85,20 @@ func (m *Model) filterTables(tables []db.TableInfo) {
 	}
 }
 
-// isTextType checks if a MySQL data type is a text type
-func isTextType(dataType string) bool {
-	switch dataType {
-	case "text", "mediumtext", "longtext", "varchar", "char":
-		return true
-	}
-	return false
-}
+// isTextType reports whether a MySQL data type is a text/string type.
+func isTextType(dataType string) bool { return db.IsTextType(dataType) }
 
-// isJSONType checks if a PostgreSQL data type is a JSON type
-func isJSONType(dataType string) bool {
-	switch dataType {
-	case "json", "jsonb":
-		return true
-	}
-	return false
-}
+// isJSONSourceType reports whether a MySQL data type is a native JSON type.
+func isJSONSourceType(dataType string) bool { return db.IsJSONSourceType(dataType) }
 
-// isIntType checks if a MySQL data type is an integer type
-func isIntType(dataType string) bool {
-	switch dataType {
-	case "tinyint", "smallint", "mediumint", "int", "bigint":
-		return true
-	}
-	return false
-}
+// isJSONType reports whether a PostgreSQL data type is a JSON/JSONB type.
+func isJSONType(dataType string) bool { return db.IsJSONType(dataType) }
 
-// isBoolType checks if a PostgreSQL data type is a boolean type
-func isBoolType(dataType string) bool {
-	switch dataType {
-	case "boolean", "bool":
-		return true
-	}
-	return false
-}
+// isIntType reports whether a MySQL data type is an integer type.
+func isIntType(dataType string) bool { return db.IsIntType(dataType) }
+
+// isBoolType reports whether a PostgreSQL data type is a boolean type.
+func isBoolType(dataType string) bool { return db.IsBoolType(dataType) }
+
+// isUUIDType reports whether a PostgreSQL data type is a UUID type.
+func isUUIDType(dataType string) bool { return db.IsUUIDType(dataType) }
