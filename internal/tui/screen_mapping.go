@@ -56,6 +56,9 @@ func (m Model) viewMapping() string {
 		if mapping.Transform == "text_to_jsonb" {
 			warnings = append(warnings, fmt.Sprintf("⚠ %s: TEXT → JSONB (invalid JSON will be skipped)", mapping.Source))
 		}
+		if mapping.Transform == "int_to_bool" {
+			warnings = append(warnings, fmt.Sprintf("⚠ %s: INT → BOOL (0=false, non-zero=true)", mapping.Source))
+		}
 	}
 	if len(warnings) > 0 {
 		sb.WriteString("\n")
@@ -232,10 +235,12 @@ func (m Model) handleMappingEditorKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			selectedCol := m.ui.AvailableTargets[m.ui.EditTargetCursor-1]
 			m.selection.ColumnMappings[m.selection.MappingCursor].Target = selectedCol.Name
 
-			// Auto-detect transform if TEXT->JSONB
+			// Auto-detect transform
 			sourceCol := m.getSourceColumn(m.selection.ColumnMappings[m.selection.MappingCursor].Source)
 			if sourceCol != nil && isTextType(sourceCol.DataType) && isJSONType(selectedCol.DataType) {
 				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "text_to_jsonb"
+			} else if sourceCol != nil && isIntType(sourceCol.DataType) && isBoolType(selectedCol.DataType) {
+				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = "int_to_bool"
 			} else {
 				m.selection.ColumnMappings[m.selection.MappingCursor].Transform = ""
 			}

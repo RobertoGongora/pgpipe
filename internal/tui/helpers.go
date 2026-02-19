@@ -102,3 +102,21 @@ func isJSONType(dataType string) bool {
 	}
 	return false
 }
+
+// isIntType checks if a MySQL data type is an integer type
+func isIntType(dataType string) bool {
+	switch dataType {
+	case "tinyint", "smallint", "mediumint", "int", "bigint":
+		return true
+	}
+	return false
+}
+
+// isBoolType checks if a PostgreSQL data type is a boolean type
+func isBoolType(dataType string) bool {
+	switch dataType {
+	case "boolean", "bool":
+		return true
+	}
+	return false
+}

@@ -213,3 +213,61 @@ func TestTransformRow(t *testing.T) {
 		t.Errorf("Expected email 'john@example.com', got %v", result[1])
 	}
 }
+
+func TestApplyTransformIntToBool(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session")
+
+	cfg := MigrationConfig{
+		SourceTable:   "users",
+		TargetTable:   "users",
+		SourcePK:      "id",
+		SourceColumns: []string{"name"},
+		TargetColumns: []string{"name"},
+		Mapping: []config.ColumnMapping{
+			{Source: "name", Target: "name"},
+		},
+		BatchSize: 1000,
+		Mode:      RunModeContinuous,
+	}
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	tests := []struct {
+		name      string
+		input     interface{}
+		expected  interface{}
+		expectErr bool
+	}{
+		{"int64 zero is false", int64(0), false, false},
+		{"int64 one is true", int64(1), true, false},
+		{"int64 non-zero is true", int64(5), true, false},
+		{"int32 one is true", int32(1), true, false},
+		{"int zero is false", int(0), false, false},
+		{"bool true passthrough", true, true, false},
+		{"bool false passthrough", false, false, false},
+		{"[]byte 1 is true", []byte("1"), true, false},
+		{"[]byte 0 is false", []byte("0"), false, false},
+		{"nil returns nil", nil, nil, false},
+		{"unexpected type errors", "oops", nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := migrator.applyTransform(tt.input, "int_to_bool", int64(1))
+			if tt.expectErr {
+				if err == nil {
+					t.Fatalf("Expected error, got nil")
+				}
+				return
+			}
+			testutil.AssertNoError(t, err)
+			if result != tt.expected {
+				t.Errorf("Expected %v (%T), got %v (%T)", tt.expected, tt.expected, result, result)
+			}
+		})
+	}
+}

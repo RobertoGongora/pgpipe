@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Smart column auto-matching by exact name
 - Column mapping editor for fine-grained control over source→target mappings
 - TEXT → JSONB transform with JSON validation
+- INT → BOOL transform for MySQL tinyint(1) to PostgreSQL boolean
 - Real-time migration progress display (500ms refresh rate)
 - JSONL error logging per migration session
 - Batch mode (run N batches then stop) and continuous mode (run until complete)

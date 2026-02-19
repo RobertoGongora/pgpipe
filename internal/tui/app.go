@@ -316,6 +316,8 @@ func (m *Model) generateAutoMappings() {
 			// Detect if transform is needed
 			if isTextType(srcCol.DataType) && isJSONType(tgtCol.DataType) {
 				mapping.Transform = "text_to_jsonb"
+			} else if isIntType(srcCol.DataType) && isBoolType(tgtCol.DataType) {
+				mapping.Transform = "int_to_bool"
 			}
 		}
 

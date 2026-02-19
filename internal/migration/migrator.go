@@ -373,6 +373,24 @@ func (m *Migrator) applyTransform(val interface{}, transform string, pkVal int64
 
 		return strVal, nil
 
+	case "int_to_bool", "INT_TO_BOOL":
+		switch v := val.(type) {
+		case int64:
+			return v != 0, nil
+		case int32:
+			return v != 0, nil
+		case int:
+			return v != 0, nil
+		case bool:
+			return v, nil
+		case []byte:
+			return len(v) > 0 && v[0] != '0', nil
+		case nil:
+			return nil, nil
+		default:
+			return nil, fmt.Errorf("int_to_bool: expected int/bool, got %T", val)
+		}
+
 	case "", "none":
 		// No transform, pass through
 		return val, nil

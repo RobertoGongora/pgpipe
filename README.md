@@ -269,7 +269,7 @@ make fmt
 Future enhancements planned for v2:
 
 - [ ] Automatic table creation with index replication
-- [ ] Multiple column transforms (dates, enums, etc.)
+- [ ] Additional column transforms (dates, enums, etc.)
 - [ ] Parallel batch processing
 - [ ] Dry-run mode with migration preview
 - [ ] Progress webhook notifications

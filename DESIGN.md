@@ -135,6 +135,9 @@ migration:
     - source: enrichment
       target: enrichment
       transform: text_to_jsonb
+    - source: is_active
+      target: is_active
+      transform: int_to_bool
     - source: name
       target: name
     - source: origin_id
@@ -300,7 +303,7 @@ pgpipe → Resume → Another 100 batches → ...
 ## Future Enhancements (v2)
 
 - [ ] Automatic table creation with index replication
-- [ ] Multiple column transforms (dates, enums, etc.)
+- [ ] Additional column transforms (dates, enums, etc.)
 - [ ] Parallel batch processing
 - [ ] Dry-run mode
 - [ ] Progress webhook notifications
