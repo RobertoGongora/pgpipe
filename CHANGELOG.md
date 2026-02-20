@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-20
+
 ### Added
 - **`PGSQL_SSLMODE` env var**: Controls the SSL mode for PostgreSQL connections (default: `prefer`). Set to `require` for Supabase and other hosted providers that mandate SSL. Example: `PGSQL_SSLMODE=require`.
 - **`.env` file support**: pgpipe now automatically loads a `.env` file from the current working directory at startup (using `godotenv.Overload`). Values in `.env` override any already-set shell environment variables, making it easy to manage connection credentials without manually sourcing the file. Works for all modes: TUI, `pgpipe run`, and `pgpipe generate-configs`.
@@ -18,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`db.DetectTransform(srcType, tgtType)`**: Centralised transform detection function in `internal/db/types.go`, used by both TUI and CLI generator.
 - **Per-config state files**: When `pgpipe run --config=./configs/foo.yaml` is used, state is saved to `./configs/.foo.state.yaml` alongside the config file, allowing concurrent runs over 85 tables without state collisions.
 - Subcommand help: `pgpipe --help` prints usage for all subcommands.
+- **Comprehensive test suite**: Added tests across all major packages — `internal/db` (type detection, `DetectTransform`), `internal/config` (DSN, Hash, env helpers, Load/Save round-trip), `internal/migration` (all transforms including `text_to_jsonb`, `getDefaultValueForUnmappedColumn`, `ErrorLogger` lifecycle, `StatePathForConfig`, `LoadStateFromPath`), `internal/tui` (helpers, filters, view rendering, `generateAutoMappings`), `internal/tui/styles` (`FormatNumber`).
+- **GitHub Actions CI**: Runs tests, format checks, and cross-platform build verification on every push and PR.
+- **GitHub Actions release workflow**: Triggered by `v*` tags; builds 4 platform binaries (linux/darwin x amd64/arm64) with checksums and creates a GitHub Release.
+- **Cross-compilation in Makefile**: `make build-linux`, `make build-all` (4 platforms into `dist/`), `make coverage`.
+- **Community standards**: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1), `SECURITY.md`, GitHub issue templates (bug report, feature request), PR template.
 
 ### Changed
 - **Type detection helpers moved to `internal/db/types.go`** as exported functions (`IsTextType`, `IsIntType`, `IsBoolType`, `IsJSONType`, `IsJSONSourceType`, `IsUUIDType`). TUI wrappers in `helpers.go` now delegate to these.
@@ -27,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Centralized TUI help/footer rendering with structured keybinding definitions.
 - Stabilized settings screen input: `Enter` reserved for editing/selection, `s` starts migration.
 - Documented refactor guidance (screen decomposition, keybinding policy, help rendering) in DESIGN.
+- `.gitignore` updated to cover cross-compiled binaries (`pgpipe-*`) and `dist/` directory.
+- `README.md` updated: fixed Go version prerequisite (1.22 → 1.23), added headless CLI documentation, added `PGSQL_SSLMODE` to env vars table, added `.env` file support section, added all three transforms to features list, added badges.
 
 ## [0.1.0] - 2024-01-08
 

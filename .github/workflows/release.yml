@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Build release binaries
+        run: |
+          VERSION="${{ github.ref_name }}"
+          LDFLAGS="-ldflags=-X main.version=${VERSION}"
+          mkdir -p dist
+
+          GOOS=linux   GOARCH=amd64 go build ${LDFLAGS} -o dist/pgpipe-linux-amd64   ./cmd/pgpipe
+          GOOS=linux   GOARCH=arm64 go build ${LDFLAGS} -o dist/pgpipe-linux-arm64   ./cmd/pgpipe
+          GOOS=darwin  GOARCH=amd64 go build ${LDFLAGS} -o dist/pgpipe-darwin-amd64  ./cmd/pgpipe
+          GOOS=darwin  GOARCH=arm64 go build ${LDFLAGS} -o dist/pgpipe-darwin-arm64  ./cmd/pgpipe
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum pgpipe-* > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: pgpipe ${{ github.ref_name }}
+          body: |
+            ## pgpipe ${{ github.ref_name }}
+
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+            ### Installation
+
+            Download the binary for your platform and make it executable:
+
+            ```bash
+            # Linux (amd64)
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/pgpipe-linux-amd64 -o pgpipe
+            chmod +x pgpipe
+
+            # macOS (Apple Silicon)
+            curl -L https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/pgpipe-darwin-arm64 -o pgpipe
+            chmod +x pgpipe
+            ```
+
+            ### Verify checksums
+
+            ```bash
+            sha256sum -c checksums.txt
+            ```
+          files: |
+            dist/pgpipe-linux-amd64
+            dist/pgpipe-linux-arm64
+            dist/pgpipe-darwin-amd64
+            dist/pgpipe-darwin-arm64
+            dist/checksums.txt
+          draft: false
+          prerelease: false

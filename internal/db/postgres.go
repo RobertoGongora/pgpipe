@@ -16,8 +16,10 @@ type PostgresClient struct {
 	config *config.PostgreSQLConfig
 }
 
-// NewPostgresClient creates a new PostgreSQL client
-func NewPostgresClient(cfg *config.PostgreSQLConfig) (*PostgresClient, error) {
+// buildPoolConfig constructs a pgxpool.Config from the given PostgreSQL config.
+// Extracted so that pool settings (including QueryExecMode) can be verified
+// in unit tests without requiring a live database connection.
+func buildPoolConfig(cfg *config.PostgreSQLConfig) (*pgxpool.Config, error) {
 	poolConfig, err := pgxpool.ParseConfig(cfg.DSN())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse PostgreSQL DSN: %w", err)
@@ -26,6 +28,21 @@ func NewPostgresClient(cfg *config.PostgreSQLConfig) (*PostgresClient, error) {
 	// Configure connection pool
 	poolConfig.MaxConns = 10
 	poolConfig.MinConns = 2
+
+	// Use simple query protocol to avoid pgx v5's prepared statement cache
+	// colliding with server-side state after connection resets. CopyFrom
+	// (used by InsertBatch) uses the COPY protocol and is unaffected.
+	poolConfig.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
+	return poolConfig, nil
+}
+
+// NewPostgresClient creates a new PostgreSQL client
+func NewPostgresClient(cfg *config.PostgreSQLConfig) (*PostgresClient, error) {
+	poolConfig, err := buildPoolConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
 	if err != nil {

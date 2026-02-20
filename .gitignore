@@ -1,6 +1,8 @@
-# Binary (in root only, not cmd/pgpipe/)
+# Binaries (root binary, cross-compiled variants, release dist/)
 /pgpipe
+/pgpipe-*
 /bin/
+/dist/
 
 # Runtime data directory
 .pgpipe/

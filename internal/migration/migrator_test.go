@@ -272,6 +272,192 @@ func TestApplyTransformIntToBool(t *testing.T) {
 	}
 }
 
+func TestApplyTransformTextToJsonb(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session-jsonb")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	tests := []struct {
+		name      string
+		input     interface{}
+		expected  interface{}
+		expectErr bool
+	}{
+		{"valid JSON string", `{"key": "value"}`, `{"key": "value"}`, false},
+		{"valid JSON array string", `[1, 2, 3]`, `[1, 2, 3]`, false},
+		{"valid JSON []byte", []byte(`{"a":1}`), `{"a":1}`, false},
+		{"nil returns nil", nil, nil, false},
+		{"invalid JSON string", `{not valid json`, nil, true},
+		{"invalid JSON []byte", []byte(`bad json`), nil, true},
+		{"unexpected type (int)", int64(42), nil, true},
+		{"unexpected type (bool)", true, nil, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := migrator.applyTransform(tt.input, "text_to_jsonb", int64(1))
+			if tt.expectErr {
+				if err == nil {
+					t.Fatalf("Expected error, got nil (result=%v)", result)
+				}
+				return
+			}
+			testutil.AssertNoError(t, err)
+			if result != tt.expected {
+				t.Errorf("Expected %v (%T), got %v (%T)", tt.expected, tt.expected, result, result)
+			}
+		})
+	}
+}
+
+func TestApplyTransformPassthrough(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session-passthrough")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	tests := []struct {
+		name      string
+		transform string
+		input     interface{}
+	}{
+		{"empty string transform with string", "", "hello"},
+		{"empty string transform with int", "", int64(42)},
+		{"empty string transform with nil", "", nil},
+		{"none transform with string", "none", "world"},
+		{"none transform with bool", "none", true},
+		{"none transform with nil", "none", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := migrator.applyTransform(tt.input, tt.transform, int64(1))
+			testutil.AssertNoError(t, err)
+			if result != tt.input {
+				t.Errorf("Passthrough transform should return input unchanged: got %v (%T), want %v (%T)",
+					result, result, tt.input, tt.input)
+			}
+		})
+	}
+}
+
+func TestApplyTransformUnknown(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session-unknown")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	unknownTransforms := []string{
+		"bogus_transform",
+		"json_to_text",
+		"UNKNOWN",
+		"text_to_integer",
+	}
+
+	for _, transform := range unknownTransforms {
+		t.Run(transform, func(t *testing.T) {
+			_, err := migrator.applyTransform("any value", transform, int64(1))
+			if err == nil {
+				t.Fatalf("Expected error for unknown transform %q, got nil", transform)
+			}
+		})
+	}
+}
+
+func TestGetDefaultValueForUnmappedColumn(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-default-values")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	// Inject specific target column metadata
+	migrator.targetColumns = map[string]db.ColumnInfo{
+		"nullable_col":    {Name: "nullable_col", DataType: "varchar", IsNullable: true},
+		"has_default_col": {Name: "has_default_col", DataType: "integer", IsNullable: false, HasDefault: true},
+		"jsonb_col":       {Name: "jsonb_col", DataType: "jsonb", IsNullable: false},
+		"text_col":        {Name: "text_col", DataType: "text", IsNullable: false},
+		"varchar_col":     {Name: "varchar_col", DataType: "varchar", IsNullable: false},
+		"charvar_col":     {Name: "charvar_col", DataType: "character varying", IsNullable: false},
+		"int_col":         {Name: "int_col", DataType: "integer", IsNullable: false},
+		"bigint_col":      {Name: "bigint_col", DataType: "bigint", IsNullable: false},
+		"bool_col":        {Name: "bool_col", DataType: "boolean", IsNullable: false},
+		"unknown_col":     {Name: "unknown_col", DataType: "bytea", IsNullable: false},
+	}
+
+	tests := []struct {
+		colName  string
+		expected interface{}
+	}{
+		{"nullable_col", nil},    // nullable → nil
+		{"has_default_col", nil}, // has DB default → nil (PG uses the default)
+		{"jsonb_col", "{}"},      // NOT NULL jsonb → "{}"
+		{"text_col", ""},         // NOT NULL text → ""
+		{"varchar_col", ""},      // NOT NULL varchar → ""
+		{"charvar_col", ""},      // NOT NULL character varying → ""
+		{"int_col", 0},           // NOT NULL integer → 0
+		{"bigint_col", 0},        // NOT NULL bigint → 0
+		{"bool_col", false},      // NOT NULL boolean → false
+		{"unknown_col", nil},     // unknown type → nil
+		{"nonexistent_col", nil}, // column not in map → nil
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.colName, func(t *testing.T) {
+			result := migrator.getDefaultValueForUnmappedColumn(tt.colName)
+			if result != tt.expected {
+				t.Errorf("getDefaultValueForUnmappedColumn(%q) = %v (%T), want %v (%T)",
+					tt.colName, result, result, tt.expected, tt.expected)
+			}
+		})
+	}
+}
+
+func TestContainsString(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		slice    []string
+		s        string
+		expected bool
+	}{
+		{"found at start", []string{"a", "b", "c"}, "a", true},
+		{"found in middle", []string{"a", "b", "c"}, "b", true},
+		{"found at end", []string{"a", "b", "c"}, "c", true},
+		{"not found", []string{"a", "b", "c"}, "d", false},
+		{"empty slice", []string{}, "a", false},
+		{"nil slice", nil, "a", false},
+		{"case sensitive not found", []string{"hello"}, "Hello", false},
+		{"exact match", []string{"foo"}, "foo", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := containsString(tt.slice, tt.s)
+			if result != tt.expected {
+				t.Errorf("containsString(%v, %q) = %v, want %v", tt.slice, tt.s, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestApplyTransformStringToUuid(t *testing.T) {
 	t.Parallel()
 

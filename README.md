@@ -1,6 +1,10 @@
 # pgpipe
 
-A TUI-based tool for migrating data from MySQL to PostgreSQL with cursor-based pagination, resumable migrations, and intelligent column mapping.
+[![CI](https://github.com/RobertoGongora/pgpipe/actions/workflows/ci.yml/badge.svg)](https://github.com/RobertoGongora/pgpipe/actions/workflows/ci.yml)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/RobertoGongora/pgpipe)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+A MySQL to PostgreSQL migration tool with an interactive TUI wizard and a headless CLI mode. Cursor-based pagination, resumable migrations, and intelligent column mapping.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -33,12 +37,17 @@ A TUI-based tool for migrating data from MySQL to PostgreSQL with cursor-based p
 - **Batch Control** - Run 1 to 2 billion rows per batch, minimum 1 for fine-grained testing
 - **Error Handling** - Skip invalid rows (e.g., bad JSON), log errors to JSONL files
 - **TEXT → JSONB Transform** - Validates JSON before inserting into PostgreSQL
+- **INT → BOOL Transform** - Converts MySQL tinyint(1) to PostgreSQL boolean
+- **STRING → UUID Transform** - Converts MySQL CHAR/VARCHAR UUIDs to PostgreSQL uuid columns
+- **Headless CLI Mode** - `pgpipe run` for scripted/automated migrations without the TUI
+- **Config Generator** - `pgpipe generate-configs` introspects schemas and writes per-table configs
+- **`.env` File Support** - Automatically loads `.env` from the current directory at startup
 
 ## Installation
 
 ### Prerequisites
 
-- Go 1.22 or later
+- Go 1.24 or later
 - MySQL instance (source)
 - PostgreSQL instance (target)
 
@@ -238,6 +247,29 @@ Each line is a JSON object for easy parsing:
 | `PGSQL_USER` | postgres | PostgreSQL user |
 | `PGSQL_PASSWORD` | - | PostgreSQL password |
 | `PGSQL_DATABASE` | - | PostgreSQL database |
+| `PGSQL_SSLMODE` | prefer | PostgreSQL SSL mode (`prefer`, `require`, `disable`) |
+
+pgpipe also supports a `.env` file in the current working directory. Values in `.env` override shell environment variables.
+
+## Headless CLI Mode
+
+For scripted or automated migrations, pgpipe can run without the TUI:
+
+### Run a migration from a config file
+
+```bash
+pgpipe run --config=./configs/users.yaml
+```
+
+### Generate per-table config files from schema introspection
+
+```bash
+pgpipe generate-configs --output-dir=./configs
+```
+
+This connects to both databases, introspects all tables, and writes one YAML config per table with auto-detected column mappings and transforms.
+
+See `pgpipe --help` for all available subcommands and flags.
 
 ## Error Handling
 
@@ -251,17 +283,15 @@ Each line is a JSON object for easy parsing:
 ## Development
 
 ```bash
-# Build
-make build
-
-# Run in development
-make dev
-
-# Run tests
-make test
-
-# Format code
-make fmt
+make build        # Build for current platform
+make build-linux  # Cross-compile for linux/amd64
+make build-all    # Build all 4 platforms (linux/darwin x amd64/arm64) into dist/
+make dev          # Run from source (go run)
+make test         # Run all tests
+make coverage     # Show test coverage per package
+make fmt          # Format code
+make lint         # Run golangci-lint
+make clean        # Remove binaries and runtime data
 ```
 
 ## Roadmap
@@ -279,9 +309,9 @@ Future enhancements planned for v2:
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and the pull request process.
 
-For bug reports and feature requests, please open an issue on GitHub.
+For bug reports and feature requests, please [open an issue](https://github.com/RobertoGongora/pgpipe/issues) using the provided templates.
 
 ## License
 
