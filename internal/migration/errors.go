@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/config"
 )
 
 // ErrorEntry represents a single error log entry

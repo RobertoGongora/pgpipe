@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

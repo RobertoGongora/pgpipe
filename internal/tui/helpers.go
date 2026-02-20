@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pgpipe/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/db"
 )
 
 // truncate shortens a string to max length with ellipsis

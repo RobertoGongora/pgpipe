@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/pgpipe/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/db"
 )
 
 // MockMySQLClient provides a configurable mock for MySQLClientInterface.

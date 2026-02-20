@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/db"
 )
 
 // RunMode defines how the migration should run

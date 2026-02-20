@@ -11,8 +11,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/db"
 )
 
 // GenerateConfigs implements `pgpipe generate-configs --output-dir=<dir>`.

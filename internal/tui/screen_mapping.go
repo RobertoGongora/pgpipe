@@ -6,8 +6,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/pgpipe/pgpipe/internal/db"
-	"github.com/pgpipe/pgpipe/internal/tui/styles"
+	"github.com/RobertoGongora/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
 )
 
 // ============================================================================

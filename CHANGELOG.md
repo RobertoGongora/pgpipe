@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-02-20
+
+### Changed
+- **Module path renamed**: `github.com/pgpipe/pgpipe` → `github.com/RobertoGongora/pgpipe` to match the actual GitHub repository URL. `go install github.com/RobertoGongora/pgpipe/cmd/pgpipe@latest` now works.
+- **README rewritten**: Added pre-built binary download instructions, full CLI reference (`pgpipe run` flags and per-config state behavior, `pgpipe generate-configs` all flags and example workflows), config file format with YAML examples, expanded transforms documentation, `.env` quick-start instructions.
+- Updated all internal imports, `AGENTS.md`, and `DESIGN.md` to use the new module path.
+- Copyright updated to 2026.
+
 ## [0.1.1] - 2026-02-20
 
 ### Added

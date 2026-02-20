@@ -1,4 +1,4 @@
-module github.com/pgpipe/pgpipe
+module github.com/RobertoGongora/pgpipe
 
 go 1.24
 

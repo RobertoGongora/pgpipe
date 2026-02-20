@@ -6,8 +6,8 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/pgpipe/pgpipe/internal/cli"
-	"github.com/pgpipe/pgpipe/internal/tui"
+	"github.com/RobertoGongora/pgpipe/internal/cli"
+	"github.com/RobertoGongora/pgpipe/internal/tui"
 )
 
 const usage = `pgpipe — MySQL to PostgreSQL migration tool

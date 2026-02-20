@@ -5,7 +5,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/pgpipe/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/config"
 )
 
 // TestBuildPoolConfig verifies the pool is configured to avoid the pgx v5

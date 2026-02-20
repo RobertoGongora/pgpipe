@@ -7,7 +7,7 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/pgpipe/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/config"
 )
 
 // MySQLClient wraps a MySQL database connection

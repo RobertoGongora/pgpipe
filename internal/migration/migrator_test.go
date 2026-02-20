@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/db"
-	"github.com/pgpipe/pgpipe/internal/testutil"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/testutil"
 )
 
 // setupTestClients creates mock MySQL and Postgres clients for testing

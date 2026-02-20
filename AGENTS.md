@@ -13,7 +13,7 @@ pgpipe is a MySQL to PostgreSQL migration tool written in Go. It supports both a
 - **go-sql-driver/mysql** (v1.8.1) — MySQL driver
 - **yaml.v3** — Config and state serialization
 
-Module path: `github.com/pgpipe/pgpipe` — Go 1.24
+Module path: `github.com/RobertoGongora/pgpipe` — Go 1.24
 
 ## Build & Development Commands
 
@@ -253,7 +253,7 @@ import (
 
     tea "github.com/charmbracelet/bubbletea"
 
-    "github.com/pgpipe/pgpipe/internal/config"
+    "github.com/RobertoGongora/pgpipe/internal/config"
 )
 ```
 

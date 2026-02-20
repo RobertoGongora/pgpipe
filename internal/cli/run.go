@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/db"
-	"github.com/pgpipe/pgpipe/internal/migration"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/migration"
 )
 
 // RunMigration implements `pgpipe run [--config=<path>]`.

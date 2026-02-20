@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pgpipe/pgpipe/internal/tui/styles"
+	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
 )
 
 // viewConnections renders the database connections screen

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pgpipe/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/db"
 )
 
 // ── truncate ──────────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pgpipe/pgpipe/internal/testutil"
+	"github.com/RobertoGongora/pgpipe/internal/testutil"
 )
 
 func TestErrorLoggerLifecycle(t *testing.T) {

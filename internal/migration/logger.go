@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/pgpipe/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/config"
 )
 
 var (

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pgpipe/pgpipe/internal/tui/styles"
+	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
 )
 
 // helpItem represents a single key binding and its description for rendering help text.

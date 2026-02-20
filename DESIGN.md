@@ -17,13 +17,13 @@ A tool for migrating data from MySQL to PostgreSQL with cursor-based pagination,
 ## Installation
 
 ```bash
-go install github.com/pgpipe/pgpipe/cmd/pgpipe@latest
+go install github.com/RobertoGongora/pgpipe/cmd/pgpipe@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/pgpipe/pgpipe.git
+git clone https://github.com/RobertoGongora/pgpipe.git
 cd pgpipe
 make build
 ```

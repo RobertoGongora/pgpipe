@@ -7,7 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/pgpipe/pgpipe/internal/tui/styles"
+	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
 )
 
 // ============================================================================

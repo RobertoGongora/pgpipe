@@ -4,10 +4,10 @@ import (
 	"database/sql"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/db"
-	"github.com/pgpipe/pgpipe/internal/migration"
-	"github.com/pgpipe/pgpipe/internal/testutil"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/migration"
+	"github.com/RobertoGongora/pgpipe/internal/testutil"
 )
 
 // createTestModel creates a minimal model for testing

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pgpipe/pgpipe/internal/config"
-	"github.com/pgpipe/pgpipe/internal/testutil"
+	"github.com/RobertoGongora/pgpipe/internal/config"
+	"github.com/RobertoGongora/pgpipe/internal/testutil"
 )
 
 func TestNewState(t *testing.T) {

@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/pgpipe/pgpipe/internal/db"
-	"github.com/pgpipe/pgpipe/internal/migration"
+	"github.com/RobertoGongora/pgpipe/internal/db"
+	"github.com/RobertoGongora/pgpipe/internal/migration"
 )
 
 // ConnectionTestMsg is sent after testing database connections
