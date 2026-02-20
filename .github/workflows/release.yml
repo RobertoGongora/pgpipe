@@ -33,13 +33,12 @@ jobs:
       - name: Build release binaries
         run: |
           VERSION="${{ github.ref_name }}"
-          LDFLAGS="-ldflags=-X main.version=${VERSION}"
           mkdir -p dist
 
-          GOOS=linux   GOARCH=amd64 go build ${LDFLAGS} -o dist/pgpipe-linux-amd64   ./cmd/pgpipe
-          GOOS=linux   GOARCH=arm64 go build ${LDFLAGS} -o dist/pgpipe-linux-arm64   ./cmd/pgpipe
-          GOOS=darwin  GOARCH=amd64 go build ${LDFLAGS} -o dist/pgpipe-darwin-amd64  ./cmd/pgpipe
-          GOOS=darwin  GOARCH=arm64 go build ${LDFLAGS} -o dist/pgpipe-darwin-arm64  ./cmd/pgpipe
+          GOOS=linux   GOARCH=amd64 go build -ldflags "-X main.version=${VERSION}" -o dist/pgpipe-linux-amd64   ./cmd/pgpipe
+          GOOS=linux   GOARCH=arm64 go build -ldflags "-X main.version=${VERSION}" -o dist/pgpipe-linux-arm64   ./cmd/pgpipe
+          GOOS=darwin  GOARCH=amd64 go build -ldflags "-X main.version=${VERSION}" -o dist/pgpipe-darwin-amd64  ./cmd/pgpipe
+          GOOS=darwin  GOARCH=arm64 go build -ldflags "-X main.version=${VERSION}" -o dist/pgpipe-darwin-arm64  ./cmd/pgpipe
 
       - name: Generate checksums
         run: |
