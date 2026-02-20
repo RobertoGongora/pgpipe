@@ -3,10 +3,10 @@ package tui
 import (
 	"errors"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/RobertoGongora/pgpipe/internal/config"
 	"github.com/RobertoGongora/pgpipe/internal/db"
 	"github.com/RobertoGongora/pgpipe/internal/migration"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Screen represents the current screen being displayed

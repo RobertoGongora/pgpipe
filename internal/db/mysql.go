@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/RobertoGongora/pgpipe/internal/config"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // MySQLClient wraps a MySQL database connection

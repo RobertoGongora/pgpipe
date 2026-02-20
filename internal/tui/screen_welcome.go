@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/RobertoGongora/pgpipe/internal/config"
 	"github.com/RobertoGongora/pgpipe/internal/migration"
 	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // viewWelcome renders the welcome screen

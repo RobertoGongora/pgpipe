@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/RobertoGongora/pgpipe/internal/tui/styles"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // viewSourceTable renders the MySQL source table selection screen

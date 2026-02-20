@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/RobertoGongora/pgpipe/internal/config"
 	"github.com/RobertoGongora/pgpipe/internal/db"
 	"github.com/RobertoGongora/pgpipe/internal/migration"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // connectDatabases creates connections to MySQL and PostgreSQL

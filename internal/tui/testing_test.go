@@ -3,11 +3,11 @@ package tui
 import (
 	"database/sql"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/RobertoGongora/pgpipe/internal/config"
 	"github.com/RobertoGongora/pgpipe/internal/db"
 	"github.com/RobertoGongora/pgpipe/internal/migration"
 	"github.com/RobertoGongora/pgpipe/internal/testutil"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // createTestModel creates a minimal model for testing
