@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"fmt"
+	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/pgpipe/pgpipe/internal/config"
@@ -201,7 +201,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case MigrationInitializingMsg:
 		// Update the initialization progress message
-		m.err = fmt.Errorf(msg.message) // Reuse err field for progress display
+		m.err = errors.New(msg.message) // Reuse err field for progress display
 		return m, nil
 
 	case MigrationInitErrorMsg:
