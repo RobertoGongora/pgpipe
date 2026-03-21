@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pgpipe — MySQL to PostgreSQL, without the pain</title>
+  <meta name="description" content="pgpipe is a fast, resumable MySQL → PostgreSQL migration tool with an interactive TUI and headless CLI mode. Cursor-based pagination. Smart column mapping. MIT licensed.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Fira+Code:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #090905;
+      --bg2:      #0f0e09;
+      --surface:  #141208;
+      --border:   #2c2820;
+      --border2:  #3a3428;
+      --text:     #ddd0a8;
+      --text2:    #8a7e62;
+      --text3:    #504838;
+      --amber:    #e8a030;
+      --amber2:   #f5c060;
+      --teal:     #28c89a;
+      --teal2:    #5eeec0;
+      --red:      #e05050;
+      --dim:      rgba(232,160,48,.08);
+      --dim2:     rgba(40,200,154,.06);
+      --glow:     0 0 40px rgba(232,160,48,.12);
+      --ff-head:  'Space Mono', monospace;
+      --ff-body:  'Fira Code', monospace;
+      --r: 4px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--ff-body);
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg);
+      overflow-x: hidden;
+    }
+
+    /* ─── SCANLINE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        rgba(0,0,0,.06) 3px,
+        rgba(0,0,0,.06) 4px
+      );
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    /* ─── NOISE TEXTURE ─── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: .5;
+    }
+
+    /* ─── GRID BG ─── */
+    .grid-bg {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(232,160,48,.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(232,160,48,.035) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 clamp(20px, 5vw, 80px);
+      height: 56px;
+      background: rgba(9,9,5,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: var(--ff-head);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--amber);
+      text-decoration: none;
+      letter-spacing: -.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .nav-logo .pipe { color: var(--teal); }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--text2);
+      text-decoration: none;
+      transition: color .2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-gh {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      font-size: 13px;
+      color: var(--text) !important;
+      transition: border-color .2s, background .2s !important;
+    }
+    .nav-gh:hover {
+      border-color: var(--amber) !important;
+      background: var(--dim) !important;
+      color: var(--amber) !important;
+    }
+
+    /* ─── HERO ─── */
+    .hero {
+      position: relative;
+      min-height: 92vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      text-align: center;
+      padding: 80px clamp(20px, 5vw, 80px) 60px;
+      overflow: hidden;
+    }
+
+    .hero-glow {
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      background: radial-gradient(ellipse at center, rgba(232,160,48,.09) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 100px;
+      font-size: 12px;
+      color: var(--text2);
+      margin-bottom: 32px;
+      animation: fadeUp .6s ease-out both;
+    }
+    .hero-badge .ver {
+      color: var(--amber);
+      font-weight: 600;
+    }
+    .hero-badge .dot {
+      width: 5px; height: 5px;
+      background: var(--teal);
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    h1 {
+      font-family: var(--ff-head);
+      font-size: clamp(32px, 6vw, 64px);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -2px;
+      color: var(--text);
+      max-width: 760px;
+      animation: fadeUp .6s .1s ease-out both;
+    }
+    h1 .mysql { color: var(--amber); }
+    h1 .pg { color: var(--teal); }
+    h1 .arrow { color: var(--text3); }
+
+    .hero-sub {
+      margin-top: 24px;
+      font-size: clamp(14px, 2vw, 16px);
+      color: var(--text2);
+      max-width: 540px;
+      line-height: 1.65;
+      animation: fadeUp .6s .2s ease-out both;
+    }
+
+    .hero-actions {
+      margin-top: 40px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+      animation: fadeUp .6s .3s ease-out both;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--r);
+      font-family: var(--ff-body);
+      font-size: 14px;
+      font-weight: 500;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      transition: all .2s;
+    }
+    .btn-primary {
+      background: var(--amber);
+      color: #0a0a06;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      background: var(--amber2);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(232,160,48,.25);
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text2);
+      border: 1px solid var(--border2);
+    }
+    .btn-secondary:hover {
+      border-color: var(--teal);
+      color: var(--teal);
+      background: var(--dim2);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--text2);
+      padding: 12px 16px;
+      font-size: 13px;
+    }
+    .btn-ghost:hover { color: var(--text); }
+
+    /* ─── TERMINAL ─── */
+    .terminal-wrap {
+      margin-top: 64px;
+      width: 100%;
+      max-width: 680px;
+      animation: fadeUp .6s .45s ease-out both;
+    }
+
+    .terminal {
+      background: #050503;
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,.6), var(--glow);
+      text-align: left;
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .tb-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .tb-dot.r { background: #e05050; }
+    .tb-dot.y { background: #e0a030; }
+    .tb-dot.g { background: #30b870; }
+    .terminal-title {
+      font-size: 12px;
+      color: var(--text2);
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .terminal-body {
+      padding: 20px;
+      font-family: var(--ff-body);
+      font-size: 13px;
+      line-height: 1.55;
+      min-height: 260px;
+    }
+
+    .term-prompt { color: var(--teal); }
+    .term-cmd { color: var(--text); }
+    .term-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 13px;
+      background: var(--amber);
+      vertical-align: middle;
+      animation: blink 1s step-end infinite;
+    }
+
+    .term-tui {
+      display: none;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      padding: 0;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .term-tui.visible { display: block; }
+
+    .tui-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 16px;
+      font-size: 12px;
+      color: var(--text2);
+      display: flex;
+      justify-content: space-between;
+    }
+    .tui-header .title { color: var(--amber); font-weight: 700; }
+
+    .tui-body { padding: 16px; }
+    .tui-row { font-size: 12px; margin-bottom: 6px; }
+    .tui-label { color: var(--text2); }
+    .tui-val { color: var(--text); }
+    .tui-src { color: var(--amber); }
+    .tui-dst { color: var(--teal); }
+
+    .progress-wrap {
+      margin: 14px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+    }
+    .progress-label { color: var(--text2); white-space: nowrap; }
+    .progress-track {
+      flex: 1;
+      height: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--amber2));
+      width: 0%;
+      transition: width 80ms linear;
+    }
+    .progress-pct { color: var(--amber); min-width: 38px; text-align: right; font-size: 12px; }
+
+    .tui-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 24px;
+      margin-top: 8px;
+      font-size: 11px;
+    }
+    .tui-stat { color: var(--text2); }
+    .tui-stat span { color: var(--text); }
+
+    /* ─── FEATURES ─── */
+    .section {
+      padding: clamp(60px, 8vw, 120px) clamp(20px, 5vw, 80px);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-family: var(--ff-head);
+      font-size: clamp(24px, 4vw, 40px);
+      font-weight: 700;
+      line-height: 1.2;
+      letter-spacing: -1.5px;
+      color: var(--text);
+      margin-bottom: 16px;
+    }
+
+    .section-sub {
+      font-size: 15px;
+      color: var(--text2);
+      max-width: 560px;
+      line-height: 1.65;
+      margin-bottom: 56px;
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .feature-card {
+      background: var(--bg2);
+      padding: 28px;
+      transition: background .2s;
+      position: relative;
+    }
+    .feature-card:hover { background: var(--surface); }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--amber), transparent);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .feature-card:hover::before { opacity: 1; }
+
+    .feature-icon {
+      font-size: 20px;
+      margin-bottom: 14px;
+      display: block;
+    }
+
+    h3 {
+      font-family: var(--ff-head);
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+      letter-spacing: -.3px;
+    }
+
+    .feature-desc {
+      font-size: 13px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    /* ─── DIVIDER ─── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ─── INSTALL ─── */
+    .install-section {
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      font-family: var(--ff-body);
+      font-size: 13px;
+      color: var(--text2);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+      margin-bottom: -1px;
+    }
+    .tab-btn.active {
+      color: var(--amber);
+      border-bottom-color: var(--amber);
+    }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .code-block {
+      position: relative;
+      background: #050503;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin: 20px 0;
+      overflow: auto;
+    }
+    .code-block pre {
+      font-family: var(--ff-body);
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--text);
+    }
+    .code-block .comment { color: var(--text3); }
+    .code-block .cmd { color: var(--amber2); }
+    .code-block .flag { color: var(--teal); }
+    .code-block .str { color: var(--teal2); }
+
+    .copy-btn {
+      position: absolute;
+      top: 12px; right: 12px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      font-family: var(--ff-body);
+      font-size: 11px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .copy-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .copy-btn.copied { border-color: var(--teal); color: var(--teal); }
+
+    /* ─── DOWNLOADS ─── */
+    .download-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 24px;
+    }
+
+    .download-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      text-decoration: none;
+      transition: all .2s;
+    }
+    .download-card:hover {
+      border-color: var(--amber);
+      background: var(--dim);
+      transform: translateY(-2px);
+    }
+    .dc-icon { font-size: 24px; }
+    .dc-name { font-family: var(--ff-head); font-size: 13px; font-weight: 700; color: var(--text); }
+    .dc-arch { font-size: 12px; color: var(--text2); }
+    .dc-link { font-size: 11px; color: var(--amber); margin-top: 4px; }
+
+    /* ─── DEMO OUTPUT ─── */
+    .demo-output {
+      background: #050503;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      font-size: 12px;
+      line-height: 1.7;
+      color: var(--text2);
+      overflow: auto;
+    }
+    .do-cmd { color: var(--teal); }
+    .do-info { color: var(--text); }
+    .do-bar { color: var(--teal2); }
+    .do-done { color: var(--amber2); }
+    .do-num { color: var(--amber); }
+
+    /* ─── TRANSFORMS TABLE ─── */
+    .transforms {
+      overflow: auto;
+      margin-top: 24px;
+    }
+    .transforms table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .transforms th {
+      text-align: left;
+      padding: 10px 16px;
+      font-family: var(--ff-head);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--text2);
+      border-bottom: 1px solid var(--border);
+    }
+    .transforms td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text2);
+      vertical-align: top;
+    }
+    .transforms tr:hover td { background: var(--surface); }
+    .transforms .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      background: var(--dim);
+      border: 1px solid rgba(232,160,48,.2);
+      border-radius: 3px;
+      font-size: 11px;
+      color: var(--amber);
+      font-family: var(--ff-body);
+    }
+    .transforms .mysql-type { color: var(--amber2); }
+    .transforms .pg-type { color: var(--teal2); }
+
+    /* ─── FOOTER ─── */
+    footer {
+      padding: 40px clamp(20px, 5vw, 80px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+
+    .footer-left { font-size: 13px; color: var(--text3); }
+    .footer-left a { color: var(--text2); text-decoration: none; transition: color .2s; }
+    .footer-left a:hover { color: var(--amber); }
+
+    .footer-right {
+      display: flex;
+      gap: 20px;
+      font-size: 13px;
+    }
+    .footer-right a { color: var(--text3); text-decoration: none; transition: color .2s; }
+    .footer-right a:hover { color: var(--text2); }
+
+    /* ─── ANIMATIONS ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0; }
+    }
+
+    @keyframes scrollReveal {
+      from { opacity: 0; transform: translateY(32px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(32px);
+      transition: opacity .6s ease-out, transform .6s ease-out;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── MISC ─── */
+    .tag {
+      display: inline-block;
+      padding: 3px 10px;
+      background: var(--dim2);
+      border: 1px solid rgba(40,200,154,.15);
+      border-radius: 3px;
+      font-size: 11px;
+      color: var(--teal);
+      font-family: var(--ff-body);
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: start;
+    }
+
+    @media (max-width: 720px) {
+      .split { grid-template-columns: 1fr; }
+      .nav-links li:not(:last-child) { display: none; }
+    }
+
+    .hl-amber { color: var(--amber); }
+    .hl-teal  { color: var(--teal); }
+    .hl-dim   { color: var(--text3); }
+
+    a { color: inherit; }
+
+    /* vertical line accent */
+    .vline {
+      display: flex;
+      gap: 16px;
+    }
+    .vline::before {
+      content: '';
+      display: block;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--amber), transparent);
+      flex-shrink: 0;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── NAV ─── -->
+<nav>
+  <a class="nav-logo" href="#">
+    pg<span class="pipe">|</span>pipe
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#transforms">Transforms</a></li>
+    <li>
+      <a class="nav-gh" href="https://github.com/RobertoGongora/pgpipe" target="_blank" rel="noopener">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+        GitHub
+      </a>
+    </li>
+  </ul>
+</nav>
+
+<!-- ─── HERO ─── -->
+<section class="hero">
+  <div class="grid-bg"></div>
+  <div class="hero-glow"></div>
+
+  <div class="hero-badge">
+    <span class="dot"></span>
+    Released <span class="ver">v0.1.2</span>
+    <span style="color:var(--border2)">·</span>
+    MIT License
+    <span style="color:var(--border2)">·</span>
+    Written in Go
+  </div>
+
+  <h1>
+    Migrate <span class="mysql">MySQL</span>
+    <span class="arrow">→</span>
+    <span class="pg">PostgreSQL</span><br>
+    without the pain.
+  </h1>
+
+  <p class="hero-sub">
+    pgpipe moves your data with cursor-based pagination, smart column mapping,
+    resumable state, and a beautiful TUI — or run headless from your scripts.
+  </p>
+
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="#install">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download v0.1.2
+    </a>
+    <a class="btn btn-secondary" href="https://github.com/RobertoGongora/pgpipe" target="_blank" rel="noopener">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+    <a class="btn btn-ghost" href="#features">See features ↓</a>
+  </div>
+
+  <!-- TERMINAL ANIMATION -->
+  <div class="terminal-wrap">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <span class="tb-dot r"></span>
+        <span class="tb-dot y"></span>
+        <span class="tb-dot g"></span>
+        <span class="terminal-title">zsh — pgpipe</span>
+      </div>
+      <div class="terminal-body" id="term-body">
+        <div id="term-line1">
+          <span class="term-prompt">~</span>
+          <span style="color:var(--text3)"> $ </span>
+          <span class="term-cmd" id="term-typed"></span><span class="term-cursor" id="term-cursor"></span>
+        </div>
+        <div class="term-tui" id="term-tui">
+          <div class="tui-header">
+            <span class="title">pgpipe</span>
+            <span>Migration in Progress</span>
+            <span>q quit</span>
+          </div>
+          <div class="tui-body">
+            <div class="tui-row">
+              <span class="tui-src">individuals</span>
+              <span style="color:var(--text3)"> (MySQL) </span>
+              <span style="color:var(--text3)">→ </span>
+              <span class="tui-dst">individuals</span>
+              <span style="color:var(--text3)"> (PostgreSQL)</span>
+            </div>
+            <div class="progress-wrap">
+              <span class="progress-label">Progress</span>
+              <div class="progress-track"><div class="progress-fill" id="prog-fill"></div></div>
+              <span class="progress-pct" id="prog-pct">0%</span>
+            </div>
+            <div class="tui-stats">
+              <div class="tui-stat">Batches <span id="stat-batches">0 / 100</span></div>
+              <div class="tui-stat">Speed <span id="stat-speed">0 rows/s</span></div>
+              <div class="tui-stat">Rows <span id="stat-rows">0 / 500,000</span></div>
+              <div class="tui-stat">Skipped <span id="stat-skip">0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FEATURES ─── -->
+<section class="section" id="features">
+  <p class="section-label reveal">Features</p>
+  <h2 class="reveal">Everything you need.<br>Nothing you don't.</h2>
+  <p class="section-sub reveal">Built for real migrations: large tables, mismatched schemas, interrupted runs, and automated pipelines.</p>
+
+  <div class="features-grid reveal">
+    <div class="feature-card">
+      <span class="feature-icon">⬛</span>
+      <h3>Interactive TUI Wizard</h3>
+      <p class="feature-desc">Built with Bubble Tea. Navigate tables, columns, and settings with keyboard shortcuts. Search with <code style="color:var(--amber);font-size:12px">/</code>. No YAML required to get started.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">⚡</span>
+      <h3>Headless CLI Mode</h3>
+      <p class="feature-desc">Run <code style="color:var(--teal);font-size:12px">pgpipe run --config=file.yaml</code> from scripts, cron, or CI pipelines. No TUI overhead. Parallel table migrations with separate state files.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🔁</span>
+      <h3>Resumable Migrations</h3>
+      <p class="feature-desc">State saved after every batch. Interrupted? Resume from the exact cursor position. SHA-256 config hashing detects changes and resets automatically.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">📍</span>
+      <h3>Cursor-Based Pagination</h3>
+      <p class="feature-desc">No <code style="color:var(--text2);font-size:12px">OFFSET</code> degradation. Each batch queries by primary key for constant performance across billions of rows.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🔀</span>
+      <h3>Smart Column Mapping</h3>
+      <p class="feature-desc">Auto-matches by name. Auto-detects transforms for type mismatches: TEXT→JSONB, TINYINT→BOOLEAN, CHAR→UUID. Full editor for custom mappings.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">⚙️</span>
+      <h3>Config Generator</h3>
+      <p class="feature-desc"><code style="color:var(--teal);font-size:12px">pgpipe generate-configs</code> introspects both schemas and writes one YAML per table. Migrate everything in one parallel loop.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">📊</span>
+      <h3>Real-Time Progress</h3>
+      <p class="feature-desc">Live updates every 500ms: batches, rows, speed (rows/sec), skipped count. Terminal-native. No web dashboards, no agents.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">📋</span>
+      <h3>JSONL Error Logs</h3>
+      <p class="feature-desc">Invalid JSON, bad UUIDs, insert failures — skipped and logged to a timestamped JSONL file. Parse with <code style="color:var(--text2);font-size:12px">jq</code>. Migration never stops.</p>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">🌿</span>
+      <h3>.env File Support</h3>
+      <p class="feature-desc">Drop a <code style="color:var(--amber);font-size:12px">.env</code> in your working directory. pgpipe loads it automatically. No extra tooling. Override any value from the shell.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── INSTALL ─── -->
+<section class="install-section" id="install">
+  <div class="section">
+    <p class="section-label reveal">Installation</p>
+    <h2 class="reveal">Get running in 60 seconds.</h2>
+    <p class="section-sub reveal">Pre-built binaries for Linux and macOS. Or install via <code style="color:var(--amber)">go install</code>.</p>
+
+    <div class="reveal">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('linux')">Linux (amd64)</button>
+        <button class="tab-btn" onclick="switchTab('mac-arm')">macOS (Apple Silicon)</button>
+        <button class="tab-btn" onclick="switchTab('mac-intel')">macOS (Intel)</button>
+        <button class="tab-btn" onclick="switchTab('go')">go install</button>
+        <button class="tab-btn" onclick="switchTab('source')">Source</button>
+      </div>
+
+      <div id="tab-linux" class="tab-panel active">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="comment"># Download v0.1.2 binary</span>
+<span class="cmd">curl</span> <span class="flag">-L</span> <span class="str">https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-linux-amd64</span> \
+     <span class="flag">-o</span> pgpipe
+<span class="cmd">chmod</span> +x pgpipe
+<span class="cmd">./pgpipe</span></pre>
+        </div>
+      </div>
+
+      <div id="tab-mac-arm" class="tab-panel">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="comment"># Download v0.1.2 binary (Apple Silicon)</span>
+<span class="cmd">curl</span> <span class="flag">-L</span> <span class="str">https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-darwin-arm64</span> \
+     <span class="flag">-o</span> pgpipe
+<span class="cmd">chmod</span> +x pgpipe
+<span class="cmd">./pgpipe</span></pre>
+        </div>
+      </div>
+
+      <div id="tab-mac-intel" class="tab-panel">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="comment"># Download v0.1.2 binary (Intel Mac)</span>
+<span class="cmd">curl</span> <span class="flag">-L</span> <span class="str">https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-darwin-amd64</span> \
+     <span class="flag">-o</span> pgpipe
+<span class="cmd">chmod</span> +x pgpipe
+<span class="cmd">./pgpipe</span></pre>
+        </div>
+      </div>
+
+      <div id="tab-go" class="tab-panel">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="comment"># Requires Go 1.24+</span>
+<span class="cmd">go install</span> <span class="str">github.com/RobertoGongora/pgpipe/cmd/pgpipe@latest</span></pre>
+        </div>
+      </div>
+
+      <div id="tab-source" class="tab-panel">
+        <div class="code-block">
+          <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          <pre><span class="cmd">git</span> clone https://github.com/RobertoGongora/pgpipe.git
+<span class="cmd">cd</span> pgpipe
+<span class="cmd">make</span> build</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- DOWNLOADS -->
+    <div class="reveal" style="margin-top: 40px;">
+      <p style="font-size:13px; color:var(--text2); margin-bottom: 4px;">v0.1.2 release binaries</p>
+      <div class="download-cards">
+        <a class="download-card" href="https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-linux-amd64" download>
+          <span class="dc-icon">🐧</span>
+          <span class="dc-name">Linux</span>
+          <span class="dc-arch">amd64 · ELF 64-bit</span>
+          <span class="dc-link">↓ pgpipe-linux-amd64</span>
+        </a>
+        <a class="download-card" href="https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-darwin-arm64" download>
+          <span class="dc-icon">🍎</span>
+          <span class="dc-name">macOS</span>
+          <span class="dc-arch">arm64 · Apple Silicon</span>
+          <span class="dc-link">↓ pgpipe-darwin-arm64</span>
+        </a>
+        <a class="download-card" href="https://github.com/RobertoGongora/pgpipe/releases/download/v0.1.2/pgpipe-darwin-amd64" download>
+          <span class="dc-icon">🍎</span>
+          <span class="dc-name">macOS</span>
+          <span class="dc-arch">amd64 · Intel</span>
+          <span class="dc-link">↓ pgpipe-darwin-amd64</span>
+        </a>
+        <a class="download-card" href="https://github.com/RobertoGongora/pgpipe/releases" target="_blank" rel="noopener">
+          <span class="dc-icon">📦</span>
+          <span class="dc-name">All Releases</span>
+          <span class="dc-arch">GitHub Releases page</span>
+          <span class="dc-link">→ github.com/RobertoGongora/pgpipe</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- QUICK START -->
+    <div style="margin-top: 56px;" class="reveal">
+      <h2 style="font-size:24px; margin-bottom: 24px;">Quick Start</h2>
+      <div class="split">
+        <div>
+          <p style="font-size:13px; color:var(--text2); margin-bottom: 12px;">1. Create a <code style="color:var(--amber)">.env</code> file</p>
+          <div class="code-block" style="margin-top:0">
+            <pre><span class="comment"># MySQL source</span>
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=secret
+MYSQL_DATABASE=source_db
+
+<span class="comment"># PostgreSQL target</span>
+PGSQL_HOST=localhost
+PGSQL_PORT=5432
+PGSQL_USER=postgres
+PGSQL_PASSWORD=secret
+PGSQL_DATABASE=target_db</pre>
+          </div>
+        </div>
+        <div>
+          <p style="font-size:13px; color:var(--text2); margin-bottom: 12px;">2. Launch and follow the wizard</p>
+          <div class="code-block" style="margin-top:0">
+            <pre><span class="cmd">./pgpipe</span>          <span class="comment"># interactive TUI</span>
+
+<span class="comment"># — or headless —</span>
+<span class="cmd">./pgpipe run</span> \
+  <span class="flag">--config</span>=.pgpipe/config.yaml
+
+<span class="comment"># — or generate configs for all tables —</span>
+<span class="cmd">./pgpipe generate-configs</span> \
+  <span class="flag">--output-dir</span>=./configs
+
+<span class="comment"># — parallel migration —</span>
+<span class="flag">for</span> f in ./configs/*.yaml; do
+  <span class="cmd">pgpipe run</span> <span class="flag">--config</span>="$f" &
+done && wait</pre>
+          </div>
+          <div class="demo-output" style="margin-top: 16px;">
+<span class="do-cmd">[pgpipe]</span> <span class="do-info">Starting migration: users → users (batch_size=5000)</span>
+<span class="do-cmd">[pgpipe]</span> <span class="do-info">Connected to MySQL and PostgreSQL</span>
+<span class="do-cmd">[pgpipe]</span> <span class="do-info">Source: <span class="do-num">1,234,567</span> rows (id 1..1234567)</span>
+<span class="do-cmd">[pgpipe]</span> <span class="do-bar">users: batch 1 | <span class="do-num">5,000</span>/1,234,567 (0.4%) | imported=<span class="do-num">5,000</span></span>
+<span class="do-cmd">[pgpipe]</span> <span class="do-bar">users: batch 2 | <span class="do-num">10,000</span>/1,234,567 (0.8%) | imported=<span class="do-num">10,000</span></span>
+<span style="color:var(--text3)">...</span>
+<span class="do-cmd">[pgpipe]</span> <span class="do-done">Migration complete: users</span>
+  Processed : <span class="do-num">1,234,567</span> rows
+  Imported  : <span class="do-num">1,234,390</span> rows
+  Skipped   : <span class="do-num">177</span> rows
+  Duration  : <span class="do-done">8m32.451s</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── TRANSFORMS ─── -->
+<section class="section" id="transforms">
+  <p class="section-label reveal">Auto-Transforms</p>
+  <h2 class="reveal">Type mismatches handled automatically.</h2>
+  <p class="section-sub reveal">pgpipe detects incompatible column types and applies the right transform — in the TUI wizard and in generated configs.</p>
+
+  <div class="transforms reveal">
+    <table>
+      <thead>
+        <tr>
+          <th>Transform</th>
+          <th>MySQL Source Types</th>
+          <th>PostgreSQL Target</th>
+          <th>Behavior</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="badge">text_to_jsonb</span></td>
+          <td class="mysql-type">TEXT, VARCHAR, LONGTEXT, JSON</td>
+          <td class="pg-type">JSON, JSONB</td>
+          <td>Validates JSON. Invalid rows skipped + logged.</td>
+        </tr>
+        <tr>
+          <td><span class="badge">int_to_bool</span></td>
+          <td class="mysql-type">TINYINT, SMALLINT, INT, BIGINT</td>
+          <td class="pg-type">BOOLEAN</td>
+          <td>0 → false, non-zero → true, NULL → NULL</td>
+        </tr>
+        <tr>
+          <td><span class="badge">string_to_uuid</span></td>
+          <td class="mysql-type">CHAR(36), VARCHAR</td>
+          <td class="pg-type">UUID</td>
+          <td>Passes through. PostgreSQL validates format.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top: 48px; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;" class="reveal">
+    <div class="vline">
+      <div>
+        <p style="font-size:13px; color:var(--text2); line-height:1.7;">
+          Transforms are set automatically when you run <code style="color:var(--amber)">pgpipe generate-configs</code> or step through the TUI wizard.
+          You can override them manually in YAML config files for custom mappings.
+        </p>
+        <p style="font-size:13px; color:var(--text3); margin-top:8px;">
+          Additional transforms (dates, enums, custom functions) are planned for v2.
+          <a href="https://github.com/RobertoGongora/pgpipe/issues" style="color:var(--teal); text-decoration:none;" target="_blank">Open an issue</a> to propose one.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FOOTER ─── -->
+<footer>
+  <div class="footer-left">
+    <strong style="color:var(--text2); font-family:var(--ff-head)">pgpipe</strong> v0.1.2 &nbsp;·&nbsp;
+    MIT License &nbsp;·&nbsp;
+    Copyright © 2026 <a href="https://github.com/RobertoGongora" target="_blank">Roberto Gongora</a>
+  </div>
+  <div class="footer-right">
+    <a href="https://github.com/RobertoGongora/pgpipe" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://github.com/RobertoGongora/pgpipe/releases" target="_blank" rel="noopener">Releases</a>
+    <a href="https://github.com/RobertoGongora/pgpipe/issues" target="_blank" rel="noopener">Issues</a>
+    <a href="https://github.com/RobertoGongora/pgpipe/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+  </div>
+</footer>
+
+<script>
+// ─── TERMINAL TYPEWRITER ───
+(function() {
+  const typed = document.getElementById('term-typed');
+  const cursor = document.getElementById('term-cursor');
+  const tui    = document.getElementById('term-tui');
+  const fill   = document.getElementById('prog-fill');
+  const pct    = document.getElementById('prog-pct');
+  const batchEl = document.getElementById('stat-batches');
+  const speedEl = document.getElementById('stat-speed');
+  const rowsEl  = document.getElementById('stat-rows');
+  const skipEl  = document.getElementById('stat-skip');
+
+  const cmd = './pgpipe';
+  let i = 0;
+
+  function typeChar() {
+    if (i < cmd.length) {
+      typed.textContent += cmd[i++];
+      setTimeout(typeChar, 80 + Math.random() * 60);
+    } else {
+      // pause, then show TUI
+      setTimeout(() => {
+        cursor.style.display = 'none';
+        tui.classList.add('visible');
+        animateProgress();
+      }, 500);
+    }
+  }
+
+  function animateProgress() {
+    let p = 0;
+    const batches = 100;
+    const totalRows = 500000;
+    const speed = 12450;
+
+    const interval = setInterval(() => {
+      p = Math.min(p + 0.8, 100);
+      const b = Math.round(p / 100 * batches);
+      const r = Math.round(p / 100 * totalRows);
+      fill.style.width = p + '%';
+      pct.textContent = p.toFixed(1) + '%';
+      batchEl.textContent = b + ' / ' + batches;
+      speedEl.textContent = (speed + Math.round((Math.random() - 0.5) * 800)).toLocaleString() + ' rows/s';
+      rowsEl.textContent = r.toLocaleString() + ' / ' + totalRows.toLocaleString();
+      skipEl.textContent = Math.floor(p / 100 * 177);
+      if (p >= 100) {
+        clearInterval(interval);
+        pct.textContent = '100%';
+        pct.style.color = 'var(--teal)';
+        // reset after delay
+        setTimeout(() => {
+          p = 0;
+          fill.style.width = '0%';
+          pct.textContent = '0%';
+          pct.style.color = '';
+          setTimeout(animateProgress, 400);
+        }, 3000);
+      }
+    }, 60);
+  }
+
+  // start after short delay
+  setTimeout(typeChar, 800);
+})();
+
+// ─── TABS ───
+function switchTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ─── COPY ───
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre.innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ─── SCROLL REVEAL ───
+(function() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        e.target.style.transitionDelay = (i * 0.05) + 's';
+        e.target.classList.add('visible');
+        obs.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+})();
+</script>
+</body>
+</html>
