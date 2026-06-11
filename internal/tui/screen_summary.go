@@ -28,11 +28,15 @@ func (m Model) viewSummary() string {
 		return sb.String()
 	}
 
-	// Status
-	if m.state.IsComplete() {
-		sb.WriteString(styles.StatusSuccess.Render("✓ Migration Complete!"))
-	} else {
+	// Status. A run that reached the end of the table but skipped rows is NOT a
+	// clean load — surface that in the headline rather than a green checkmark.
+	switch {
+	case !m.state.IsComplete():
 		sb.WriteString(styles.StatusWarning.Render("◐ Migration Paused"))
+	case m.state.Progress.SkippedRows > 0:
+		sb.WriteString(styles.StatusWarning.Render("⚠ Migration Complete — with skipped rows (load incomplete)"))
+	default:
+		sb.WriteString(styles.StatusSuccess.Render("✓ Migration Complete!"))
 	}
 	sb.WriteString("\n\n")
 

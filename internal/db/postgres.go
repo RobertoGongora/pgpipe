@@ -201,14 +201,10 @@ func (c *PostgresClient) InsertBatch(ctx context.Context, tableName string, colu
 		table = parts[1]
 	}
 
-	// Build column list
-	quotedCols := make([]string, len(columns))
-	for i, col := range columns {
-		quotedCols[i] = fmt.Sprintf(`"%s"`, col)
-	}
-	colList := strings.Join(quotedCols, ", ")
-
-	// Use COPY for bulk insert (much faster than individual INSERTs)
+	// Bulk COPY (much faster than individual INSERTs). On failure, return the
+	// error instead of silently retrying row-by-row and discarding the rows that
+	// fail — the caller decides how to recover. Never swallow a COPY error here:
+	// doing so was the silent row-loss bug this replaced.
 	copyCount, err := c.pool.CopyFrom(
 		ctx,
 		pgx.Identifier{schema, table},
@@ -216,35 +212,10 @@ func (c *PostgresClient) InsertBatch(ctx context.Context, tableName string, colu
 		pgx.CopyFromRows(rows),
 	)
 	if err != nil {
-		// If COPY fails, fall back to individual inserts
-		return c.insertRowsIndividually(ctx, schema, table, colList, columns, rows)
+		return 0, fmt.Errorf("COPY into %q.%q (%d rows) failed: %w", schema, table, len(rows), err)
 	}
 
 	return int(copyCount), nil
-}
-
-// insertRowsIndividually inserts rows one by one, skipping failures
-func (c *PostgresClient) insertRowsIndividually(ctx context.Context, schema, table, colList string, columns []string, rows [][]interface{}) (int, error) {
-	// Build placeholder list ($1, $2, $3, ...)
-	placeholders := make([]string, len(columns))
-	for i := range columns {
-		placeholders[i] = fmt.Sprintf("$%d", i+1)
-	}
-	placeholderList := strings.Join(placeholders, ", ")
-
-	query := fmt.Sprintf(`INSERT INTO "%s"."%s" (%s) VALUES (%s)`,
-		schema, table, colList, placeholderList)
-
-	inserted := 0
-	for _, row := range rows {
-		_, err := c.pool.Exec(ctx, query, row...)
-		if err == nil {
-			inserted++
-		}
-		// Skip failed rows silently - they should be logged by the caller
-	}
-
-	return inserted, nil
 }
 
 // Pool returns the underlying connection pool for advanced usage

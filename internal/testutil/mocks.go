@@ -141,6 +141,11 @@ type MockPostgresClient struct {
 	InsertedCount int
 	InsertErr     error
 
+	// InsertBatchFunc, if set, overrides InsertBatch — lets tests simulate
+	// per-call results (e.g. a bulk call fails, then a mix of per-row
+	// success/failure on the retry).
+	InsertBatchFunc func(rows [][]interface{}) (int, error)
+
 	// Call tracking - check these to verify interactions
 	Calls            MockPostgresCalls
 	LastInsertedRows [][]interface{} // Stores the last rows passed to InsertBatch
@@ -219,6 +224,9 @@ func (m *MockPostgresClient) GetTableRowCount(ctx context.Context, tableName str
 func (m *MockPostgresClient) InsertBatch(ctx context.Context, tableName string, columns []string, rows [][]interface{}) (int, error) {
 	m.Calls.InsertBatch++
 	m.LastInsertedRows = rows
+	if m.InsertBatchFunc != nil {
+		return m.InsertBatchFunc(rows)
+	}
 	if m.InsertErr != nil {
 		return 0, m.InsertErr
 	}

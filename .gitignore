@@ -32,6 +32,7 @@ vendor/
 # Environment files and credentials
 .env
 .env.local
+.env.bak*
 *.env
 mise.toml
 

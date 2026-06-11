@@ -252,8 +252,11 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 		// Transform and validate row data
 		insertRow, err := m.transformRow(scanDest, pkVal)
 		if err != nil {
-			// Log error and skip this row
-			m.errorLogger.Log(pkVal, err, fmt.Sprintf("%v", scanDest))
+			// Log error and skip this row; if the log write itself fails, stop —
+			// the log is the only record of which rows were dropped.
+			if logErr := m.errorLogger.Log(pkVal, err, fmt.Sprintf("%v", scanDest)); logErr != nil {
+				return processed, imported, skipped, lastID, fmt.Errorf("error log write failed (cannot record skipped row %d): %w", pkVal, logErr)
+			}
 			skipped++
 			continue
 		}
@@ -273,16 +276,12 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 	if len(insertRows) > 0 {
 		insertedCount, err := m.postgres.InsertBatch(ctx, m.config.TargetTable, m.config.TargetColumns, insertRows)
 		if err != nil {
-			logDebug("[BATCH] Bulk insert failed: %v, trying individual inserts for %d rows", err, len(insertRows))
-			// Try individual inserts and log failures
-			for i, row := range insertRows {
-				_, insertErr := m.postgres.InsertBatch(ctx, m.config.TargetTable, m.config.TargetColumns, [][]interface{}{row})
-				if insertErr != nil {
-					m.errorLogger.Log(rowIDs[i], insertErr, fmt.Sprintf("%v", row))
-					skipped++
-				} else {
-					imported++
-				}
+			logDebug("[BATCH] Bulk insert failed: %v, retrying %d rows individually", err, len(insertRows))
+			imp, skp, retryErr := m.retryRowsIndividually(ctx, insertRows, rowIDs)
+			imported += imp
+			skipped += skp
+			if retryErr != nil {
+				return processed, imported, skipped, lastID, retryErr
 			}
 			logDebug("[BATCH] Individual inserts complete: imported=%d, skipped=%d", imported, skipped)
 		} else {
@@ -294,6 +293,32 @@ func (m *Migrator) processBatch(ctx context.Context, cursor int64) (processed, i
 	}
 
 	return processed, imported, skipped, lastID, nil
+}
+
+// retryRowsIndividually is the fallback when a bulk COPY fails: it re-inserts
+// each row on its own so one bad row no longer loses the whole batch. Every row
+// is accounted for — imported on success, or logged via the ErrorLogger and
+// counted as skipped on failure — so the caller's processed total always equals
+// imported + skipped. It stops early if ctx is cancelled (returning ctx.Err())
+// instead of hammering a dead connection and flooding the log with one
+// "context canceled" entry per remaining row.
+func (m *Migrator) retryRowsIndividually(ctx context.Context, insertRows [][]interface{}, rowIDs []int64) (imported, skipped int, err error) {
+	for i, row := range insertRows {
+		if cerr := ctx.Err(); cerr != nil {
+			return imported, skipped, cerr
+		}
+		if _, insertErr := m.postgres.InsertBatch(ctx, m.config.TargetTable, m.config.TargetColumns, [][]interface{}{row}); insertErr != nil {
+			// The error log is now the only record of a dropped row; if we cannot
+			// write it, fail the run rather than lose the row silently.
+			if logErr := m.errorLogger.Log(rowIDs[i], insertErr, fmt.Sprintf("%v", row)); logErr != nil {
+				return imported, skipped, fmt.Errorf("error log write failed (cannot record skipped row %d): %w", rowIDs[i], logErr)
+			}
+			skipped++
+			continue
+		}
+		imported++
+	}
+	return imported, skipped, nil
 }
 
 // transformRow transforms a source row based on column mappings
@@ -409,7 +434,16 @@ func (m *Migrator) applyTransform(val interface{}, transform string, pkVal int64
 		}
 
 	case "", "none":
-		// No transform, pass through
+		// No transform. Go's MySQL driver returns []byte for CHAR/VARCHAR/TEXT
+		// columns when scanning into interface{}; pgx.CopyFrom binary-encodes a
+		// []byte into a text column as bytea (`\x<hex>`), corrupting the value
+		// (e.g. "Teresa" -> "\x546572657361"). Converting to string forces the
+		// text protocol, which PostgreSQL accepts for text/timestamp/etc. (same
+		// fix as string_to_uuid above). Non-[]byte values (int64, bool,
+		// time.Time, nil) pass through untouched.
+		if b, ok := val.([]byte); ok {
+			return string(b), nil
+		}
 		return val, nil
 
 	default:

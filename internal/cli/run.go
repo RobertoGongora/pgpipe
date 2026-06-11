@@ -262,7 +262,39 @@ func RunMigration(args []string) error {
 		fmt.Printf("  Errors    : %d (see %s)\n", errLogger.Count(), errLogger.Path())
 	}
 
+	// Reconcile and fail loudly (non-zero exit) if the load is not clean — a
+	// "successful" run that imported fewer rows than it processed is exactly the
+	// failure mode this tool must never report as success. Run this even when
+	// runErr != nil so a partial/cancelled run still surfaces its gap; only
+	// promote the reconcile error to the exit status if there isn't already a
+	// fatal error to report.
+	p := finalState.Progress
+	if rerr := reconcile(p.ProcessedRows, p.ImportedRows, p.SkippedRows); rerr != nil {
+		fmt.Printf("  Reconcile : FAIL — %v\n", rerr)
+		if runErr == nil {
+			runErr = rerr
+		}
+	} else {
+		fmt.Printf("  Reconcile : OK — imported == processed (%s)\n", formatInt(p.ImportedRows))
+	}
+
 	return runErr
+}
+
+// reconcile verifies a clean load. It returns nil ONLY when imported ==
+// processed with zero skips. Otherwise it returns a non-nil error:
+//   - an unaccounted gap (processed != imported + skipped) means rows vanished
+//     silently — the failure mode this tool was hardened against;
+//   - any skipped rows mean rows were rejected and the load is incomplete.
+func reconcile(processed, imported, skipped int64) error {
+	if gap := processed - imported - skipped; gap != 0 {
+		return fmt.Errorf("reconciliation failed: processed=%d imported=%d skipped=%d (gap=%d) — possible silent loss",
+			processed, imported, skipped, gap)
+	}
+	if skipped > 0 {
+		return fmt.Errorf("incomplete load: %d of %d rows skipped (see error log)", skipped, processed)
+	}
+	return nil
 }
 
 // formatInt formats an int64 with comma separators for readability.

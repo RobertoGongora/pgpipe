@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -347,6 +348,118 @@ func TestApplyTransformPassthrough(t *testing.T) {
 					result, result, tt.input, tt.input)
 			}
 		})
+	}
+}
+
+// TestApplyTransformPassthroughBytesToString locks in the text-corruption fix:
+// Go's MySQL driver returns []byte for CHAR/VARCHAR/TEXT columns when scanning
+// into interface{}; without converting to string, pgx.CopyFrom writes it as
+// bytea (`\x<hex>`) into text columns (e.g. "Teresa" -> "\x546572657361"). The
+// passthrough must convert []byte -> string.
+func TestApplyTransformPassthroughBytesToString(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient, pgClient := setupTestClients()
+	state := createTestState(10000, "test-session-bytes")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+
+	for _, transform := range []string{"", "none"} {
+		t.Run("bytes->string transform="+transform, func(t *testing.T) {
+			// "Teresa" as ASCII bytes (the real case that triggered the bug).
+			result, err := migrator.applyTransform([]byte("Teresa"), transform, int64(1))
+			testutil.AssertNoError(t, err)
+			s, ok := result.(string)
+			if !ok {
+				t.Fatalf("expected string after []byte passthrough, got %T", result)
+			}
+			if s != "Teresa" {
+				t.Errorf("expected %q, got %q", "Teresa", s)
+			}
+		})
+	}
+
+	// Multibyte UTF-8 (accents) must also survive intact.
+	t.Run("multibyte_utf8", func(t *testing.T) {
+		result, err := migrator.applyTransform([]byte("José"), "", int64(1))
+		testutil.AssertNoError(t, err)
+		if result != "José" {
+			t.Errorf("multibyte: expected %q, got %q (%T)", "José", result, result)
+		}
+	})
+}
+
+// TestRetryRowsIndividually proves the per-row fallback that the silent-loss fix
+// activates: when a bulk COPY fails, each row is retried individually and every
+// one is accounted for — imported on success, logged + skipped on failure — so
+// imported+skipped always equals the batch size. (Regression for the 56k-row
+// silent loss, where per-row failures returned nil and vanished.)
+func TestRetryRowsIndividually(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient := testutil.NewMockMySQLClient()
+	pgClient := testutil.NewMockPostgresClient()
+	state := createTestState(10000, "test-retry-rows")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+	defer migrator.errorLogger.Close()
+
+	// Single-row InsertBatch fails for even ids, succeeds for odd ids.
+	pgClient.InsertBatchFunc = func(rows [][]interface{}) (int, error) {
+		id := rows[0][0].(int64)
+		if id%2 == 0 {
+			return 0, fmt.Errorf("simulated constraint violation for id %d", id)
+		}
+		return 1, nil
+	}
+
+	insertRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}}
+	rowIDs := []int64{1, 2, 3, 4}
+
+	imported, skipped, rerr := migrator.retryRowsIndividually(context.Background(), insertRows, rowIDs)
+	testutil.AssertNoError(t, rerr)
+	if imported != 2 || skipped != 2 {
+		t.Fatalf("expected imported=2 skipped=2, got imported=%d skipped=%d", imported, skipped)
+	}
+	if got := migrator.errorLogger.Count(); got != 2 {
+		t.Errorf("expected 2 error-log entries (one per skipped row), got %d", got)
+	}
+}
+
+// TestRetryRowsIndividuallyStopsOnCancel verifies the fallback bails out when the
+// context is cancelled instead of flooding the error log with one entry per
+// remaining row.
+func TestRetryRowsIndividuallyStopsOnCancel(t *testing.T) {
+	t.Parallel()
+
+	mysqlClient := testutil.NewMockMySQLClient()
+	pgClient := testutil.NewMockPostgresClient()
+	state := createTestState(10000, "test-retry-cancel")
+	cfg := createTestMigrationConfig()
+
+	migrator, err := NewMigrator(mysqlClient, pgClient, cfg, state)
+	testutil.AssertNoError(t, err)
+	defer migrator.errorLogger.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	insertRows := [][]interface{}{{int64(1)}, {int64(2)}, {int64(3)}}
+	rowIDs := []int64{1, 2, 3}
+
+	imported, skipped, rerr := migrator.retryRowsIndividually(ctx, insertRows, rowIDs)
+	if rerr == nil {
+		t.Fatal("expected context error, got nil")
+	}
+	if imported != 0 || skipped != 0 {
+		t.Errorf("expected no rows processed after immediate cancel, got imported=%d skipped=%d", imported, skipped)
+	}
+	if got := migrator.errorLogger.Count(); got != 0 {
+		t.Errorf("expected 0 error-log entries after immediate cancel, got %d", got)
 	}
 }
 

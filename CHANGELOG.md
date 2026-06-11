@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-06-11
+
+### Fixed
+- **Silent row loss eliminated.** `InsertBatch` previously fell back to a row-by-row insert that discarded failing rows and returned `(n, nil)` — never an error — so a migration that dropped rows reported `Skipped: 0` and exited 0. (A real 11.3M-row load silently lost 56,440 rows this way.) `InsertBatch` now surfaces the `CopyFrom` error; the migrator's per-row fallback (`retryRowsIndividually`) retries each row, logs every failure via the `ErrorLogger`, and counts it as skipped, so `processed == imported + skipped` always holds.
+- **Hex-corrupted text columns.** The no-transform passthrough returned the MySQL driver's raw `[]byte`, which pgx `CopyFrom` binary-encodes as `bytea` (`\x<hex>`) into text columns — corrupting every text value (e.g. `"Teresa"` → `\x546572657361`). The passthrough now converts `[]byte`→`string` for text-family columns (same pattern as `string_to_uuid`). Note: a no-transform `BLOB`→`bytea` mapping is therefore not supported; use an explicit transform for true binary targets.
+- **Error-log write failures are now fatal** instead of silently ignored: if pgpipe cannot record a skipped row, it stops rather than losing the only record of what was dropped.
+
+### Added
+- **Post-load reconciliation.** `pgpipe run` now verifies `imported + skipped == processed` with zero skips and exits non-zero (printing a `Reconcile : FAIL` line) on any gap or skip. It runs even after a fatal or cancelled run, so partial loads still surface their gap.
+- Regression tests for the per-row fallback (mixed success/failure, context-cancellation) and for the reconciliation rule.
+
+### Changed
+- **TUI summary** shows a warning headline ("⚠ Migration Complete — with skipped rows (load incomplete)") instead of a green checkmark when rows were skipped.
+- The per-row retry now stops promptly on context cancellation instead of attempting — and logging a failure for — every remaining row in the batch.
+- `.gitignore` hardened to cover `.env.bak*` credential backups.
+
 ## [0.1.2] - 2026-02-20
 
 ### Changed
